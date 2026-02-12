@@ -90,7 +90,7 @@ The decoder registry provides protocol-specific human-readable transaction expla
 
 | Protocol | Contract | Functions |
 |----------|----------|-----------|
-| Sky Protocol LockstakeEngine | `0xCe01C90...` | 13 (urn management, staking, borrowing, delegation) |
+| Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 (urn management, staking, borrowing, delegation) |
 | MultiSend | Standard Safe MultiSend | Batch transaction decoding |
 
 See the [core package README](packages/core/README.md#creating-a-custom-decoder) for how to add your own.
@@ -103,12 +103,24 @@ See the [core package README](packages/core/README.md#creating-a-custom-decoder)
 4. Ensure all tests pass (`pnpm test`)
 5. Submit a pull request
 
+## Publishing to npm
+
+Use `pnpm pack` then `npm publish` on the tarball. This ensures `workspace:*` dependencies are resolved to real versions. Do not use `npm publish` directly from a package directory.
+
+```bash
+# Core (publish first)
+cd packages/core && pnpm pack && npm publish shield3-sky-safe-core-*.tgz --access public && rm *.tgz
+
+# CLI
+cd ../cli && pnpm pack && npm publish shield3-sky-safe-cli-*.tgz --access public && rm *.tgz
+```
+
 ## Trust Assumptions
 
 Users must trust:
 - This TypeScript implementation
 - [viem](https://viem.sh) cryptographic library
-- Safe Transaction Service API data
+- Safe Transaction Service API data — however, the tool independently re-encodes decoded parameters and verifies they match the raw calldata and EIP-712 hashes, so API-provided decoded data is not blindly trusted
 - Hardware wallet secure screen
 
 ## License

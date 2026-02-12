@@ -776,7 +776,7 @@ export default function TransactionAnalysis() {
             <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
               <p className="font-semibold text-yellow-900 mb-2">⚠️ Critical Step</p>
               <p className="text-sm text-yellow-900">
-                Your device may show one or more of these hashes. Verify they match character-by-character.
+                Your device may show one or more of these hashes. Verify they match.
                 If any hash doesn't match, DO NOT SIGN!
               </p>
             </div>
