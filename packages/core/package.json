@@ -1,0 +1,43 @@
+{
+  "name": "@shield3/sky-safe-core",
+  "version": "0.1.0",
+  "description": "Core Safe transaction hash calculation and decoding logic",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "prepublishOnly": "pnpm run build && pnpm run test"
+  },
+  "keywords": ["safe", "gnosis-safe", "multisig", "eip-712", "hash-calculation", "transaction-decoder"],
+  "license": "AGPL-3.0-only",
+  "author": "Security Alliance",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/securityalliance/sky-safe-tx-decoder",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/securityalliance/sky-safe-tx-decoder#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "viem": "2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.0",
+    "typescript": "5.3.3",
+    "vitest": "2.0.0"
+  }
+}

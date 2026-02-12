@@ -1,0 +1,36 @@
+{
+  "description": "Unsafe transaction that modifies Safe owners (addOwnerWithThreshold)",
+  "version": "1.3.0",
+  "transaction": {
+    "safe": "0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d",
+    "to": "0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d",
+    "value": "0",
+    "data": "0x0d582f1300000000000000000000000055555555555555555555555555555555555555550000000000000000000000000000000000000000000000000000000000000002",
+    "operation": 0,
+    "safeTxGas": "0",
+    "baseGas": "0",
+    "gasPrice": "0",
+    "gasToken": "0x0000000000000000000000000000000000000000",
+    "refundReceiver": "0x0000000000000000000000000000000000000000",
+    "nonce": "999",
+    "safeTxHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "isExecuted": false,
+    "isSuccessful": null,
+    "confirmations": [],
+    "dataDecoded": {
+      "method": "addOwnerWithThreshold",
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "address",
+          "value": "0x5555555555555555555555555555555555555555"
+        },
+        {
+          "name": "_threshold",
+          "type": "uint256",
+          "value": "2"
+        }
+      ]
+    }
+  }
+}

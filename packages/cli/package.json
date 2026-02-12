@@ -1,0 +1,53 @@
+{
+  "name": "@shield3/sky-safe-cli",
+  "version": "0.1.0",
+  "description": "CLI for Safe transaction hash calculation and verification",
+  "type": "module",
+  "bin": {
+    "sky-safe": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run --passWithNoTests",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "prepublishOnly": "pnpm run build && pnpm run test"
+  },
+  "keywords": [
+    "safe",
+    "gnosis-safe",
+    "multisig",
+    "cli",
+    "transaction-decoder",
+    "eip-712"
+  ],
+  "license": "AGPL-3.0-only",
+  "author": "Security Alliance",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/securityalliance/sky-safe-tx-decoder",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/securityalliance/sky-safe-tx-decoder#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@shield3/sky-safe-core": "workspace:*",
+    "@types/inquirer": "9.0.9",
+    "chalk": "5.3.0",
+    "commander": "11.1.0",
+    "inquirer": "12.11.1",
+    "ora": "8.0.1",
+    "viem": "2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.0",
+    "tsx": "4.7.0",
+    "typescript": "5.3.3",
+    "vitest": "2.0.0"
+  }
+}
