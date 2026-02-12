@@ -84,6 +84,19 @@ The tool detects:
 - **Gas token attacks** - Custom gas token + custom refund receiver combinations
 - **Owner/threshold modifications** - Direct and nested (via MultiSend) changes to Safe owners
 
+### Example Warnings
+
+The `examples/` directory contains crafted transactions that trigger each warning type:
+
+```bash
+sky-safe verify --file examples/gas-token-attack.json
+sky-safe verify --file examples/untrusted-delegatecall.json
+sky-safe verify --file examples/owner-modification.json
+sky-safe verify --file examples/guard-set.json
+sky-safe verify --file examples/module-enable.json
+sky-safe verify --file examples/multiple-issues.json
+```
+
 ## Custom Decoders
 
 The decoder registry provides protocol-specific human-readable transaction explanations. Currently included:
