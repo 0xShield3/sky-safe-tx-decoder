@@ -17,7 +17,7 @@ const program = new Command()
 program
   .name('sky-safe')
   .description('Safe multisig transaction hash calculator and decoder')
-  .version('0.1.0')
+  .version('0.1.4')
 
 // Verify command - Fetch and display transaction
 program.addCommand(createVerifyCommand())

@@ -38,3 +38,6 @@ pnpm-debug.log*
 tmp/
 temp/
 .vercel
+
+# Claude Code
+.claude/
