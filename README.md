@@ -2,7 +2,7 @@
 
 > **"Don't trust, verify!"** - Independently verify Safe transaction hashes before signing.
 
-TypeScript tool for calculating and verifying Safe multisig transaction hashes with security analysis and protocol-specific decoding. Available as a CLI and web UI.
+TypeScript tool for calculating and verifying Safe multisig transaction hashes with security analysis and protocol-specific decoding. Available as a CLI, web UI, and core library.
 
 Based on [pcaversaccio/safe-tx-hashes-util](https://github.com/pcaversaccio/safe-tx-hashes-util).
 
