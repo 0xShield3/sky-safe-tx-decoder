@@ -128,14 +128,12 @@ export default function TransactionAnalysis() {
         // Try custom decoder or MultiSend detection
         if (tx.data && tx.data !== '0x' && tx.data.length > 2) {
           if (isMultiSend(tx.data as `0x${string}`)) {
-            console.log('Detected MultiSend transaction');
             const nestedTxs = decodeMultiSend(tx.data as `0x${string}`);
 
             // Verify the outer MultiSend transaction itself
             if (tx.dataDecoded) {
               const outerVerification = verifyDecodedData(tx.data as `0x${string}`, tx.dataDecoded);
               setMultiSendVerification(outerVerification);
-              console.log('MultiSend outer transaction verification:', outerVerification);
             }
 
             if (nestedTxs) {
@@ -145,7 +143,6 @@ export default function TransactionAnalysis() {
                 const transactionsParam = tx.dataDecoded.parameters.find(p => p.name === 'transactions');
                 if (transactionsParam?.valueDecoded && Array.isArray(transactionsParam.valueDecoded)) {
                   apiNestedTxs = transactionsParam.valueDecoded as SafeApiNestedTransaction[];
-                  console.log('Found Safe API decoded nested transactions:', apiNestedTxs);
                 }
               }
 
@@ -169,29 +166,17 @@ export default function TransactionAnalysis() {
               });
 
               setMultiSendTxs(decoded);
-              console.log('Decoded nested transactions:', decoded);
             }
           } else {
             // Try direct custom decoder
-            console.log('Attempting to decode:');
-            console.log('  to address:', tx.to);
-            console.log('  network:', network);
-            console.log('  data length:', tx.data.length);
-            console.log('  hasDecoder:', decoderRegistry.hasDecoder(tx.to as `0x${string}`, network));
-
             const decoded = decoderRegistry.decode(tx.to as `0x${string}`, tx.data, network);
             if (decoded) {
-              console.log('Decoded:', decoded);
               setCustomDecoded(decoded);
-            }
-            else {
-              console.log('No decoder found or decode failed');
-
+            } else {
               // If no custom decoder but Safe API has decoded data, verify it
               if (tx.dataDecoded) {
                 const verification = verifyDecodedData(tx.data as `0x${string}`, tx.dataDecoded);
                 setApiDecodedVerification(verification);
-                console.log('Safe API decoded data verification:', verification);
               }
             }
           }

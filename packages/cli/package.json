@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-cli",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "description": "CLI for Safe transaction hash calculation and verification",
   "type": "module",
   "bin": {
@@ -28,10 +28,10 @@
   "author": "Security Alliance",
   "repository": {
     "type": "git",
-    "url": "https://github.com/securityalliance/sky-safe-tx-decoder",
+    "url": "https://github.com/0xShield3/sky-safe-tx-decoder",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/securityalliance/sky-safe-tx-decoder#readme",
+  "homepage": "https://github.com/0xShield3/sky-safe-tx-decoder#readme",
   "publishConfig": {
     "access": "public"
   },

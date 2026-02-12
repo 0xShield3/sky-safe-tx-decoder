@@ -36,7 +36,8 @@ sky-safe verify --address 0x... --nonce 520
 
 ### Web UI
 
-Live on IPFS: [sky-safe-tx-decoder](https://bafybeictbpzvb7zr7snwis3batt7osa5zfiul6fv5g7dkxmh35zbwmyfwq.ipfs.dweb.link/)
+- Cloudflare Pages: [sky-safe-tx-decoder.pages.dev](https://sky-safe-tx-decoder.pages.dev/)
+- IPFS: [sky-safe-tx-decoder](https://bafybeictbpzvb7zr7snwis3batt7osa5zfiul6fv5g7dkxmh35zbwmyfwq.ipfs.dweb.link/)
 
 Or run locally:
 
@@ -48,7 +49,7 @@ pnpm --filter @shield3/sky-safe-ui dev
 ### From Source
 
 ```bash
-git clone https://github.com/securityalliance/sky-safe-tx-decoder
+git clone https://github.com/0xShield3/sky-safe-tx-decoder
 cd sky-safe-tx-decoder
 pnpm install
 pnpm build
