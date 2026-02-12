@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "CLI for Safe transaction hash calculation and verification",
   "type": "module",
   "bin": {
