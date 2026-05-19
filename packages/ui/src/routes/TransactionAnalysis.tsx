@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   SafeApiClient,
+  getNetwork,
   calculateSafeTxHash,
   analyzeSecurity,
   decoderRegistry,
@@ -88,7 +89,7 @@ export default function TransactionAnalysis() {
         setLoadingMessage('Calculating transaction hash...');
 
         // Get chain ID for network
-        const chainId = network === 'sepolia' ? 11155111 : 1;
+        const chainId = getNetwork(network).chainId;
 
         // Calculate hash
         const computed = calculateSafeTxHash(
