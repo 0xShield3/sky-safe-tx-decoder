@@ -28,9 +28,15 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     safePrefix: 'sep',
     etherscanUrl: 'https://sepolia.etherscan.io',
   },
+  base: {
+    name: 'base',
+    chainId: 8453,
+    apiUrl: `${BASE_URL}/base`,
+    safePrefix: 'base',
+    etherscanUrl: 'https://basescan.org',
+  },
   // Can add more networks as needed:
   // arbitrum: { name: 'arbitrum', chainId: 42161, apiUrl: `${BASE_URL}/arb1`, safePrefix: 'arb1', etherscanUrl: 'https://arbiscan.io' },
-  // base: { name: 'base', chainId: 8453, apiUrl: `${BASE_URL}/base`, safePrefix: 'base', etherscanUrl: 'https://basescan.org' },
   // optimism: { name: 'optimism', chainId: 10, apiUrl: `${BASE_URL}/oeth`, safePrefix: 'oeth', etherscanUrl: 'https://optimistic.etherscan.io' },
   // polygon: { name: 'polygon', chainId: 137, apiUrl: `${BASE_URL}/pol`, safePrefix: 'matic', etherscanUrl: 'https://polygonscan.com' },
 }
