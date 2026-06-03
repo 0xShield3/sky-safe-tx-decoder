@@ -1,5 +1,5 @@
 {
-  "name": "@shield3/sky-safe-core",
+  "name": "@shield3/safe-tx-core",
   "version": "0.1.1",
   "description": "Core Safe transaction hash calculation and decoding logic",
   "type": "module",

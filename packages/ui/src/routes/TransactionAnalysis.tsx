@@ -6,7 +6,7 @@ import {
   calculateSafeTxHash,
   analyzeSecurity,
   decoderRegistry,
-  LockstakeEngineDecoder,
+  WethDecoder,
   decodeMultiSend,
   isMultiSend,
   getAddressTag,
@@ -18,11 +18,11 @@ import {
   type SafeApiNestedTransaction,
   type SafeApiDataDecoded,
   type DecodeVerificationResult,
-} from '@shield3/sky-safe-core';
+} from '@shield3/safe-tx-core';
 import { AddressHighlighter } from '../components/AddressHighlighter';
 
 // Register custom decoders
-decoderRegistry.register(new LockstakeEngineDecoder());
+decoderRegistry.register(new WethDecoder());
 
 export default function TransactionAnalysis() {
   const navigate = useNavigate();

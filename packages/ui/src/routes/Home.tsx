@@ -76,47 +76,39 @@ export default function Home() {
       <div className="mt-12 pt-8 border-t">
         <h3 className="text-lg font-semibold mb-4">Integrated Protocol Decoders</h3>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-semibold text-blue-900 mb-2">Sky Protocol - LockstakeEngine</h4>
+          <h4 className="font-semibold text-blue-900 mb-2">WETH (Wrapped Ether)</h4>
           <p className="text-sm text-blue-800 mb-2">
-            Enhanced decoding for Sky Protocol staking and rewards operations on Ethereum mainnet.
+            Example decoder showing how to add protocol-specific, human-readable explanations.
+            Decodes Wrapped Ether (WETH9) operations on Ethereum mainnet.
           </p>
           <p className="text-xs font-mono text-blue-700 mb-3 break-all">
-            0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3
+            0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
           </p>
           <div className="flex gap-2 mb-3">
             <a
-              href="https://etherscan.io/address/0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3"
+              href="https://etherscan.io/address/0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
             >
               View on Etherscan ↗
             </a>
-            <a
-              href="https://developers.sky.money/protocol/rewards/staking-engine/#deployments"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
-            >
-              Protocol Docs ↗
-            </a>
           </div>
           <details className="text-sm text-blue-800">
             <summary className="cursor-pointer font-medium hover:text-blue-900">
-              Supported Functions (13 total)
+              Supported Functions (5 total)
             </summary>
             <ul className="mt-2 ml-4 space-y-1 list-disc">
-              <li><strong>Urn Management:</strong> open, hope, nope</li>
-              <li><strong>Deposit/Withdraw:</strong> lock, free, freeNoFee</li>
-              <li><strong>Delegation/Farming:</strong> selectVoteDelegate, selectFarm</li>
-              <li><strong>Borrow/Repay:</strong> draw, wipe, wipeAll</li>
-              <li><strong>Rewards:</strong> getReward</li>
-              <li><strong>Batch Operations:</strong> multicall (with recursive nested decoding)</li>
+              <li><strong>Wrap / Unwrap:</strong> deposit, withdraw</li>
+              <li><strong>Transfers:</strong> transfer, transferFrom</li>
+              <li><strong>Approvals:</strong> approve (flags unlimited approvals)</li>
             </ul>
           </details>
         </div>
         <p className="text-sm text-gray-500 mt-4">
-          More protocol decoders coming soon. Contributions welcome!
+          Want decoding for your own protocol? See{' '}
+          <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">packages/core/src/decoders/weth.ts</code>{' '}
+          for a fully-commented template. Contributions welcome!
         </p>
       </div>
     </div>

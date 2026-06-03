@@ -30,7 +30,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@shield3/sky-safe-core':
+      '@shield3/safe-tx-core':
         specifier: workspace:*
         version: link:../core
       chalk:
@@ -83,7 +83,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@shield3/sky-safe-core':
+      '@shield3/safe-tx-core':
         specifier: workspace:*
         version: link:../core
       react:

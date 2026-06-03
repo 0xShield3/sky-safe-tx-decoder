@@ -1,5 +1,5 @@
 {
-  "name": "sky-safe-tx-decoder",
+  "name": "safe-tx-decoder",
   "version": "0.1.0",
   "private": true,
   "description": "TypeScript-based Safe multisig transaction hash calculator and decoder with custom protocol support",
@@ -26,7 +26,7 @@
     "lint": "pnpm -r lint",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "clean": "pnpm -r clean && rm -rf node_modules",
-    "dev:cli": "pnpm --filter @shield3/sky-safe-cli dev"
+    "dev:cli": "pnpm --filter @shield3/safe-tx-cli dev"
   },
   "devDependencies": {
     "@types/node": "20.19.0",

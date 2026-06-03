@@ -1,11 +1,11 @@
-# @shield3/sky-safe-core
+# @shield3/safe-tx-core
 
 Core library for Safe transaction hash calculation, decoding, and verification.
 
 ## Installation
 
 ```bash
-npm install @shield3/sky-safe-core
+npm install @shield3/safe-tx-core
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @shield3/sky-safe-core
 ### Calculate Transaction Hash
 
 ```typescript
-import { calculateSafeTxHash } from '@shield3/sky-safe-core'
+import { calculateSafeTxHash } from '@shield3/safe-tx-core'
 
 const result = calculateSafeTxHash(
   1, // chainId
@@ -41,7 +41,7 @@ console.log(result.messageHash) // Transaction message hash
 ### Verify Decoded Data
 
 ```typescript
-import { verifyDecodedData } from '@shield3/sky-safe-core'
+import { verifyDecodedData } from '@shield3/safe-tx-core'
 
 const verification = verifyDecodedData(rawData, decodedData)
 if (verification.verified) {
@@ -52,7 +52,7 @@ if (verification.verified) {
 ### Security Analysis
 
 ```typescript
-import { analyzeSecurity } from '@shield3/sky-safe-core'
+import { analyzeSecurity } from '@shield3/safe-tx-core'
 
 const analysis = analyzeSecurity(txData)
 console.log(analysis.overallRisk) // 'none' | 'low' | 'medium' | 'high' | 'critical'
@@ -61,7 +61,7 @@ console.log(analysis.overallRisk) // 'none' | 'low' | 'medium' | 'high' | 'criti
 ### Safe API Client
 
 ```typescript
-import { createSafeApiClient } from '@shield3/sky-safe-core'
+import { createSafeApiClient } from '@shield3/safe-tx-core'
 
 const client = createSafeApiClient('ethereum')
 const txs = await client.fetchTransactionsByNonce('0x...', 520)
@@ -74,32 +74,56 @@ Custom decoders provide human-readable explanations for protocol-specific transa
 
 ### 1. Create the decoder
 
+A decoder implements the `CustomDecoder` interface. It sees only the
+transaction calldata (`data`), not the ETH `value`.
+
 ```typescript
 // packages/core/src/decoders/your-protocol.ts
+import type { Address, Hex } from 'viem'
+import { decodeFunctionData, parseAbi } from 'viem'
 import type { CustomDecoder, DecodedTransactionData } from './types.js'
-import { decodeFunctionData, type Address, type Hex } from 'viem'
+
+const YOUR_ABI = parseAbi([
+  'function doSomething(address to, uint256 amount)',
+])
 
 export class YourProtocolDecoder implements CustomDecoder {
-  private static readonly ADDRESSES: Record<string, Address> = {
-    ethereum: '0x...',
+  readonly contractAddress: Address = '0x...'
+  readonly contractName = 'YourProtocol'
+  readonly network = 'ethereum'
+
+  canDecode(to: Address, data: Hex): boolean {
+    return to.toLowerCase() === this.contractAddress.toLowerCase() && data.length >= 10
   }
 
-  canDecode(to: Address, network: string): boolean {
-    const target = YourProtocolDecoder.ADDRESSES[network]
-    return target !== undefined && to.toLowerCase() === target.toLowerCase()
+  decode(data: Hex): DecodedTransactionData {
+    const { functionName, args } = decodeFunctionData({ abi: YOUR_ABI, data })
+    // ...build a DecodedFunction with a human-readable `explanation` and `riskLevel`
+    return {
+      main: {
+        name: functionName,
+        signature: 'doSomething(address,uint256)',
+        parameters: [/* ... */],
+        explanation: 'Plain-English description of what this call does.',
+        riskLevel: 'low',
+      },
+      isMulticall: false,
+    }
   }
 
-  decode(to: Address, data: Hex, network: string): DecodedTransactionData | null {
-    // Decode calldata and return structured result
-    // Return null if decoding fails
+  getSupportedFunctions(): string[] {
+    return ['doSomething']
   }
 }
 ```
 
+If decoding throws, the registry catches it and falls back to the Safe API's
+decoded data, so you don't need to return `null`.
+
 ### 2. Register it
 
 ```typescript
-import { decoderRegistry, YourProtocolDecoder } from '@shield3/sky-safe-core'
+import { decoderRegistry, YourProtocolDecoder } from '@shield3/safe-tx-core'
 decoderRegistry.register(new YourProtocolDecoder())
 ```
 
@@ -110,7 +134,9 @@ decoderRegistry.register(new YourProtocolDecoder())
 export * from './decoders/your-protocol.js'
 ```
 
-See `packages/core/src/decoders/lockstake-engine.ts` for a complete example with 13 functions, multicall support, and risk assessment.
+See `packages/core/src/decoders/weth.ts` for a complete, heavily-commented
+example covering wrap/unwrap, transfers, and approvals (including an
+unlimited-approval warning).
 
 ## API Reference
 

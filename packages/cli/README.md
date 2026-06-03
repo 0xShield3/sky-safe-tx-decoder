@@ -1,35 +1,35 @@
-# @shield3/sky-safe-cli
+# @shield3/safe-tx-cli
 
 Command-line tool for verifying Safe multisig transaction hashes.
 
 ## Installation
 
 ```bash
-npm install -g @shield3/sky-safe-cli
+npm install -g @shield3/safe-tx-cli
 ```
 
 Or run directly:
 
 ```bash
-npx @shield3/sky-safe-cli verify --address 0x... --nonce 520
+npx @shield3/safe-tx-cli verify --address 0x... --nonce 520
 ```
 
 ## Usage
 
 ```bash
 # Ethereum mainnet (default)
-sky-safe verify \
+safe-tx verify \
   --address 0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d \
   --nonce 520
 
 # Sepolia testnet
-sky-safe verify \
+safe-tx verify \
   --address 0x384937B93ca0dB13f5bC62450f309b31CC48D278 \
   --nonce 8 \
   --network sepolia
 
 # From local JSON file
-sky-safe verify --file examples/gas-token-attack.json
+safe-tx verify --file examples/gas-token-attack.json
 ```
 
 ### Options
@@ -68,10 +68,10 @@ HASH VERIFIED: Calculated hash matches API hash
 
 ```bash
 # From the monorepo root
-pnpm --filter @shield3/sky-safe-cli dev verify --address 0x... --nonce 42
+pnpm --filter @shield3/safe-tx-cli dev verify --address 0x... --nonce 42
 
 # Build
-pnpm --filter @shield3/sky-safe-cli build
+pnpm --filter @shield3/safe-tx-cli build
 ```
 
 ## License

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { SafeApiClient, type SafeApiMultisigTransaction, getSafeUrl, getEtherscanAddressUrl } from '@shield3/sky-safe-core';
+import { SafeApiClient, type SafeApiMultisigTransaction, getSafeUrl, getEtherscanAddressUrl } from '@shield3/safe-tx-core';
 
 export default function SafeTransactions() {
   const params = useParams<{ address: string; network: string }>();

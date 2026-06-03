@@ -1,5 +1,5 @@
 {
-  "name": "@shield3/sky-safe-ui",
+  "name": "@shield3/safe-tx-ui",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@shield3/sky-safe-core": "workspace:*",
+    "@shield3/safe-tx-core": "workspace:*",
     "react": "18.3.0",
     "react-dom": "18.3.0",
     "react-router-dom": "7.9.6",

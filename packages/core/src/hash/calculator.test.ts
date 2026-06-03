@@ -8,8 +8,10 @@ import type { SafeTransactionData } from '../types.js';
 
 describe('calculateSafeTxHash', () => {
   it('should calculate correct hash for real Safe v1.3.0 transaction (nonce 434)', () => {
-    // Real transaction from 0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d nonce 434
-    // This is a multicall transaction that locks 54M SKY tokens
+    // Real transaction from 0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d nonce 434.
+    // A real on-chain multicall, kept as a known-good hash vector (verified
+    // against a Ledger device and the Safe API). The hash calculation is
+    // protocol-agnostic, so the calldata contents don't matter here.
     const txData: SafeTransactionData = {
       to: '0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3',
       value: '0',

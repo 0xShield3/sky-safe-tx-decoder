@@ -1,0 +1,10 @@
+# Cloudflare Pages configuration for the Safe Transaction Decoder UI.
+#
+# Deploy with:
+#   pnpm --filter @shield3/safe-tx-ui build
+#   cd packages/ui && npx wrangler pages deploy dist
+#
+# Change `name` to your Cloudflare Pages project name (created on first deploy).
+name = "safe-tx-decoder"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"

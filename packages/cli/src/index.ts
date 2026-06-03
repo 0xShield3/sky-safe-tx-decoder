@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Sky Safe Transaction Decoder CLI
+ * Safe Transaction Decoder CLI
  *
  * CLI tool for calculating and verifying Safe multisig transaction hashes.
  * TypeScript port of safe-tx-hashes-util bash script.
@@ -15,7 +15,7 @@ import { createVerifyCommand } from './commands/verify.js'
 const program = new Command()
 
 program
-  .name('sky-safe')
+  .name('safe-tx')
   .description('Safe multisig transaction hash calculator and decoder')
   .version('0.1.5')
 

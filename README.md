@@ -1,8 +1,13 @@
-# Sky Safe Transaction Decoder
+# Safe Transaction Decoder
 
 > **"Don't trust, verify!"** - Independently verify Safe transaction hashes before signing.
 
 TypeScript tool for calculating and verifying Safe multisig transaction hashes with security analysis and protocol-specific decoding. Available as a CLI, web UI, and core library.
+
+This is a **generic, protocol-agnostic** decoder. It ships with a single example
+protocol decoder for **WETH** (`packages/core/src/decoders/weth.ts`) to demonstrate
+how to add human-readable explanations for any contract — copy that file to support
+your own protocol.
 
 Based on [pcaversaccio/safe-tx-hashes-util](https://github.com/pcaversaccio/safe-tx-hashes-util).
 
@@ -22,7 +27,7 @@ Based on [pcaversaccio/safe-tx-hashes-util](https://github.com/pcaversaccio/safe
 ### CLI
 
 ```bash
-npx @shield3/sky-safe-cli verify \
+npx @shield3/safe-tx-cli verify \
   --address 0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d \
   --nonce 520
 ```
@@ -30,20 +35,17 @@ npx @shield3/sky-safe-cli verify \
 Or install globally:
 
 ```bash
-npm install -g @shield3/sky-safe-cli
-sky-safe verify --address 0x... --nonce 520
+npm install -g @shield3/safe-tx-cli
+safe-tx verify --address 0x... --nonce 520
 ```
 
 ### Web UI
 
-- Cloudflare Pages: [sky-safe-tx-decoder.pages.dev](https://sky-safe-tx-decoder.pages.dev/)
-- IPFS: [sky-safe-tx-decoder](https://bafybeiavucfkhjjunfozcaetvhvaeibicb3iaoizbwqzkjzssvg4d7tat4.ipfs.dweb.link/)
-
-Or run locally:
+Deploy your own (see [Deployment](#deployment)), or run locally:
 
 ```bash
 pnpm install
-pnpm --filter @shield3/sky-safe-ui dev
+pnpm --filter @shield3/safe-tx-ui dev
 ```
 
 ### From Source
@@ -58,7 +60,7 @@ pnpm build
 pnpm dev:cli verify --address 0x... --nonce 520
 
 # Run UI dev server
-pnpm --filter @shield3/sky-safe-ui dev
+pnpm --filter @shield3/safe-tx-ui dev
 ```
 
 ## Supported Networks
@@ -66,15 +68,16 @@ pnpm --filter @shield3/sky-safe-ui dev
 | Network | Chain ID |
 |---------|----------|
 | Ethereum Mainnet | 1 |
+| Base | 8453 |
 | Sepolia Testnet | 11155111 |
 
 ## Project Structure
 
 ```
 packages/
-  core/   # @shield3/sky-safe-core - Hash calculation, decoding, security analysis
-  cli/    # @shield3/sky-safe-cli - Command-line interface
-  ui/     # @shield3/sky-safe-ui  - Web interface (React + Vite)
+  core/   # @shield3/safe-tx-core - Hash calculation, decoding, security analysis
+  cli/    # @shield3/safe-tx-cli - Command-line interface
+  ui/     # @shield3/safe-tx-ui  - Web interface (React + Vite)
 ```
 
 ## Security Analysis
@@ -89,12 +92,12 @@ The tool detects:
 The `examples/` directory contains crafted transactions that trigger each warning type:
 
 ```bash
-sky-safe verify --file examples/gas-token-attack.json
-sky-safe verify --file examples/untrusted-delegatecall.json
-sky-safe verify --file examples/owner-modification.json
-sky-safe verify --file examples/guard-set.json
-sky-safe verify --file examples/module-enable.json
-sky-safe verify --file examples/multiple-issues.json
+safe-tx verify --file examples/gas-token-attack.json
+safe-tx verify --file examples/untrusted-delegatecall.json
+safe-tx verify --file examples/owner-modification.json
+safe-tx verify --file examples/guard-set.json
+safe-tx verify --file examples/module-enable.json
+safe-tx verify --file examples/multiple-issues.json
 ```
 
 ## Custom Decoders
@@ -103,10 +106,37 @@ The decoder registry provides protocol-specific human-readable transaction expla
 
 | Protocol | Contract | Functions |
 |----------|----------|-----------|
-| Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 (urn management, staking, borrowing, delegation) |
+| WETH (example) | `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` | 5 (deposit, withdraw, transfer, approve, transferFrom) |
 | MultiSend | Standard Safe MultiSend | Batch transaction decoding |
 
-See the [core package README](packages/core/README.md#creating-a-custom-decoder) for how to add your own.
+The WETH decoder is a fully-commented **template** — see
+`packages/core/src/decoders/weth.ts` and the
+[core package README](packages/core/README.md#creating-a-custom-decoder) for how to
+add a decoder for your own protocol.
+
+## Deployment
+
+The web UI is a static SPA — build it and host the `dist/` folder anywhere.
+
+### Cloudflare Pages
+
+A `wrangler.toml` is included in `packages/ui`. From that directory:
+
+```bash
+pnpm --filter @shield3/safe-tx-ui build
+cd packages/ui
+npx wrangler login              # one-time, opens a browser
+npx wrangler pages deploy dist  # deploys to the project named in wrangler.toml
+```
+
+Edit `name` in `packages/ui/wrangler.toml` to set your Cloudflare Pages project
+name (create the project on first deploy when prompted). `_redirects` and
+`_headers` in `packages/ui/public` handle SPA routing and content types.
+
+### Other static hosts
+
+`pnpm --filter @shield3/safe-tx-ui build` then upload `dist/` to Vercel, Netlify,
+IPFS, or any static host. No server or environment variables are required.
 
 ## Contributing
 
@@ -122,10 +152,10 @@ Use `pnpm pack` then `npm publish` on the tarball. This ensures `workspace:*` de
 
 ```bash
 # Core (publish first)
-cd packages/core && pnpm pack && npm publish shield3-sky-safe-core-*.tgz --access public && rm *.tgz
+cd packages/core && pnpm pack && npm publish shield3-safe-tx-core-*.tgz --access public && rm *.tgz
 
 # CLI
-cd ../cli && pnpm pack && npm publish shield3-sky-safe-cli-*.tgz --access public && rm *.tgz
+cd ../cli && pnpm pack && npm publish shield3-safe-tx-cli-*.tgz --access public && rm *.tgz
 ```
 
 ## Trust Assumptions

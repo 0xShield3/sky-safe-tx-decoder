@@ -1,10 +1,10 @@
 {
-  "name": "@shield3/sky-safe-cli",
+  "name": "@shield3/safe-tx-cli",
   "version": "0.1.5",
   "description": "CLI for Safe transaction hash calculation and verification",
   "type": "module",
   "bin": {
-    "sky-safe": "./dist/index.js"
+    "safe-tx": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -36,7 +36,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@shield3/sky-safe-core": "workspace:*",
+    "@shield3/safe-tx-core": "workspace:*",
     "chalk": "5.3.0",
     "commander": "11.1.0",
     "inquirer": "12.11.1",

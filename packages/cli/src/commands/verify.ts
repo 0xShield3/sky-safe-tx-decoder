@@ -2,7 +2,7 @@
  * Verify command - Fetch and display Safe transaction from API
  *
  * Usage:
- *   sky-safe verify --address 0x... --nonce 123 [--network ethereum]
+ *   safe-tx verify --address 0x... --nonce 123 [--network ethereum]
  */
 
 import { Command } from 'commander'
@@ -15,15 +15,15 @@ import {
   SafeApiError,
   isNetworkSupported,
   decoderRegistry,
-  LockstakeEngineDecoder,
+  WethDecoder,
   calculateSafeTxHash,
   verifySafeTxHash,
   analyzeSecurity,
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
-} from '@shield3/sky-safe-core'
-import type { SafeApiMultisigTransaction } from '@shield3/sky-safe-core'
+} from '@shield3/safe-tx-core'
+import type { SafeApiMultisigTransaction } from '@shield3/safe-tx-core'
 import type { Address, Hex } from 'viem'
 import {
   printNetworkConfig,
@@ -36,7 +36,7 @@ import {
 } from '../formatters/output.js'
 
 // Register custom decoders
-decoderRegistry.register(new LockstakeEngineDecoder())
+decoderRegistry.register(new WethDecoder())
 
 export function createVerifyCommand(): Command {
   const command = new Command('verify')
@@ -74,7 +74,7 @@ export function createVerifyCommand(): Command {
         // Validate network
         if (!isNetworkSupported(options.network)) {
           console.error(chalk.red(`✗ Unsupported network: ${options.network}`))
-          console.error(chalk.dim('  Run `sky-safe networks` to see supported networks'))
+          console.error(chalk.dim('  Run `safe-tx networks` to see supported networks'))
           process.exit(1)
         }
 

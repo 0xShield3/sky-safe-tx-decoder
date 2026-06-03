@@ -10,8 +10,8 @@ import type {
   DecodedFunction,
   SecurityAnalysisResult,
   SafeApiDataDecoded,
-} from '@shield3/sky-safe-core'
-import { getAddressTag } from '@shield3/sky-safe-core'
+} from '@shield3/safe-tx-core'
+import { getAddressTag } from '@shield3/safe-tx-core'
 import type { Address } from 'viem'
 
 /**

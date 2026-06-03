@@ -1,5 +1,5 @@
 /**
- * @shield3/sky-safe-core
+ * @shield3/safe-tx-core
  *
  * Core Safe multisig transaction hash calculation and decoding logic.
  * TypeScript port of safe-tx-hashes-util bash script.
@@ -15,6 +15,6 @@ export * from './api/networks.js'
 export * from './api/safe-client.js'
 export * from './decoders/types.js'
 export * from './decoders/registry.js'
-export * from './decoders/lockstake-engine.js'
+export * from './decoders/weth.js'
 export * from './hash/index.js'
 export * from './security/index.js'

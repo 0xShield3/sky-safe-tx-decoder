@@ -59,11 +59,11 @@ for (const addr of TRUSTED_MODULES) {
   })
 }
 
-// Sky Protocol contracts
-ADDRESS_TAGS.set('0xce01c90de7fd1bcfa39e237fe6d8d9f569e8a6a3', {
-  label: 'LockstakeEngine',
-  description: 'Sky Protocol staking and rewards contract',
-  category: 'protocol',
+// Token contracts
+ADDRESS_TAGS.set('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', {
+  label: 'WETH',
+  description: 'Wrapped Ether (WETH9)',
+  category: 'token',
 })
 
 /**
