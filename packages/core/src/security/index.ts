@@ -13,6 +13,12 @@
 export { analyzeSecurity } from './analyzer.js';
 
 // Individual checkers
+export { checkAddressBook } from './address-book-check.js';
+export type {
+  AddressBookCheckResult,
+  AddressBookRecipient,
+  AddressBookRecipientStatus,
+} from './address-book-check.js';
 export { checkDelegateCall, isTrustedForDelegateCall, getOperationDescription, OperationType } from './delegate-call.js';
 export { checkGasTokenAttack } from './gas-token.js';
 export { checkOwnerModifications, checkOwnerModificationsFromDecoded, isOwnerModificationFunction } from './owner-checks.js';

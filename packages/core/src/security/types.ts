@@ -224,6 +224,11 @@ export interface SecurityAnalysisResult {
   moduleGuard: ModuleGuardCheckResult;
 
   /**
+   * Address book check (silent when no book loaded).
+   */
+  addressBook: import('./address-book-check.js').AddressBookCheckResult;
+
+  /**
    * Overall risk assessment
    */
   overallRisk: 'critical' | 'high' | 'medium' | 'low' | 'none';

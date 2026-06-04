@@ -2,15 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   SafeApiClient,
-  getNetwork,
   calculateSafeTxHash,
   analyzeSecurity,
   decoderRegistry,
   LockstakeEngineDecoder,
   decodeMultiSend,
   isMultiSend,
-  getAddressTag,
   verifyDecodedData,
+  extractAddressesFromApiDecoded,
+  extractAddressesFromDecodedTransaction,
   type SafeApiMultisigTransaction,
   type SecurityAnalysisResult,
   type DecodedTransactionData,
@@ -20,16 +20,27 @@ import {
   type DecodeVerificationResult,
 } from '@shield3/sky-safe-core';
 import { AddressHighlighter } from '../components/AddressHighlighter';
+import { Address } from '../components/Address';
+import { ParamValue } from '../components/ParamValue';
+import { useAddressBook } from '../address-book/AddressBookContext';
+import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
 // Register custom decoders
 decoderRegistry.register(new LockstakeEngineDecoder());
 
 export default function TransactionAnalysis() {
   const navigate = useNavigate();
-  const params = useParams<{ address: string; nonce: string; network: string }>();
-  const address = params.address!;
+  const params = useParams<{ nonce: string }>();
   const nonce = params.nonce!;
-  const network = params.network!;
+  // network, safeAddress (here as `address` for backwards-compat naming),
+  // chainId all come from SafeRouteProvider — no manual useParams threading,
+  // no manual loadNetworkContracts call, no chainId derivation.
+  const { network, safeAddress, chainId } = useSafeRoute();
+  const address = safeAddress;
+  // Subscribe to the address book — we don't render its state directly here,
+  // but the security analysis needs to re-run whenever the book changes
+  // (load / clear), so we depend on `state` below.
+  const { state: addressBookState } = useAddressBook();
   const [searchParams] = useSearchParams();
   const safeTxHashParam = searchParams.get('safeTxHash');
 
@@ -38,6 +49,9 @@ export default function TransactionAnalysis() {
   const [version, setVersion] = useState<string>('');
   const [hashes, setHashes] = useState<{ domainHash: string; messageHash: string; safeTxHash: string } | null>(null);
   const [security, setSecurity] = useState<SecurityAnalysisResult | null>(null);
+  // Addresses pulled from decoded params — stored so the security effect can
+  // re-run when the address book changes without re-fetching the transaction.
+  const [paramAddresses, setParamAddresses] = useState<`0x${string}`[]>([]);
   const [customDecoded, setCustomDecoded] = useState<DecodedTransactionData | null>(null);
   const [apiDecodedVerification, setApiDecodedVerification] = useState<DecodeVerificationResult | null>(null);
   const [multiSendVerification, setMultiSendVerification] = useState<DecodeVerificationResult | null>(null);
@@ -88,10 +102,7 @@ export default function TransactionAnalysis() {
         setVersion(safeVersion);
         setLoadingMessage('Calculating transaction hash...');
 
-        // Get chain ID for network
-        const chainId = getNetwork(network).chainId;
-
-        // Calculate hash
+        // chainId comes from SafeRouteProvider — no manual network lookup here.
         const computed = calculateSafeTxHash(
           chainId,
           address as `0x${string}`,
@@ -111,22 +122,14 @@ export default function TransactionAnalysis() {
         );
         setHashes(computed);
 
-        // Analyze security
-        const analysis = analyzeSecurity({
-          to: tx.to as `0x${string}`,
-          value: tx.value,
-          data: tx.data as `0x${string}`,
-          operation: tx.operation,
-          safeTxGas: tx.safeTxGas.toString(),
-          baseGas: tx.baseGas.toString(),
-          gasPrice: tx.gasPrice,
-          gasToken: tx.gasToken as `0x${string}`,
-          refundReceiver: tx.refundReceiver as `0x${string}`,
-          nonce: tx.nonce.toString(),
-        });
-        setSecurity(analysis);
+        // Decode multisend / custom decoders first — we need decoded data to
+        // feed the address-book check with param-level addresses.
+        const extracted: `0x${string}`[] = [];
 
-        // Try custom decoder or MultiSend detection
+        // Always pull addresses from the Safe API's dataDecoded (covers
+        // multisend nested calls via valueDecoded recursion).
+        extracted.push(...extractAddressesFromApiDecoded(tx.dataDecoded));
+
         if (tx.data && tx.data !== '0x' && tx.data.length > 2) {
           if (isMultiSend(tx.data as `0x${string}`)) {
             const nestedTxs = decodeMultiSend(tx.data as `0x${string}`);
@@ -155,6 +158,10 @@ export default function TransactionAnalysis() {
                   network
                 );
 
+                if (customDecoded) {
+                  extracted.push(...extractAddressesFromDecodedTransaction(customDecoded));
+                }
+
                 // Get corresponding Safe API decoded data
                 const apiDecoded = apiNestedTxs?.[index]?.dataDecoded || null;
 
@@ -173,6 +180,7 @@ export default function TransactionAnalysis() {
             const decoded = decoderRegistry.decode(tx.to as `0x${string}`, tx.data, network);
             if (decoded) {
               setCustomDecoded(decoded);
+              extracted.push(...extractAddressesFromDecodedTransaction(decoded));
             } else {
               // If no custom decoder but Safe API has decoded data, verify it
               if (tx.dataDecoded) {
@@ -182,6 +190,10 @@ export default function TransactionAnalysis() {
             }
           }
         }
+
+        // Stash param addresses; the security effect below will compose them
+        // with the current address-book state to (re-)run analyzeSecurity.
+        setParamAddresses(extracted);
       } catch (err) {
         let errorMessage = 'Failed to fetch transaction';
 
@@ -202,6 +214,35 @@ export default function TransactionAnalysis() {
 
     fetchAndAnalyze();
   }, [address, nonce, network, safeTxHashParam]);
+
+  // Re-run security analysis whenever the transaction OR address book changes.
+  // Keeping this separate from the fetch effect means loading/clearing the book
+  // while a transaction is open updates warnings live, without re-fetching.
+  useEffect(() => {
+    if (!transaction) {
+      setSecurity(null);
+      return;
+    }
+    const analysis = analyzeSecurity(
+      {
+        to: transaction.to as `0x${string}`,
+        value: transaction.value,
+        data: transaction.data as `0x${string}`,
+        operation: transaction.operation,
+        safeTxGas: transaction.safeTxGas.toString(),
+        baseGas: transaction.baseGas.toString(),
+        gasPrice: transaction.gasPrice,
+        gasToken: transaction.gasToken as `0x${string}`,
+        refundReceiver: transaction.refundReceiver as `0x${string}`,
+        nonce: transaction.nonce.toString(),
+      },
+      {
+        additionalAddresses: paramAddresses.map((address) => ({ address })),
+        safeAddress: address as `0x${string}`,
+      }
+    );
+    setSecurity(analysis);
+  }, [transaction, paramAddresses, addressBookState, address]);
 
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
@@ -249,10 +290,11 @@ export default function TransactionAnalysis() {
           <h2 className="text-2xl font-bold">Transaction Analysis</h2>
         </div>
         <div className="text-sm text-gray-600 space-y-1">
-          <p>Safe: <span className="font-mono">{address}</span></p>
+          <p>Safe: <Address address={address} /></p>
           <p>Network: {network} | Nonce: {nonce} | Safe Version: {version}</p>
         </div>
       </div>
+
 
       {/* Transaction Selector (if multiple exist) */}
       {allTransactions.length > 1 && (
@@ -347,6 +389,34 @@ export default function TransactionAnalysis() {
                 </ul>
               </div>
             )}
+
+            {security.addressBook.warnings.length > 0 && (
+              <div className="bg-white rounded-lg p-4">
+                <p className="font-semibold mb-2">
+                  {security.addressBook.warningLevel === 'high' ? '🔴' : '🟡'} Address Book
+                </p>
+                <ul className="text-sm space-y-1">
+                  {security.addressBook.warnings.map((r, i) => (
+                    <li key={i}>
+                      •{' '}
+                      {r.status === 'inactive' ? (
+                        <>
+                          <strong>INACTIVE</strong> address ({r.label}) —{' '}
+                          <Address address={r.address} />
+                          {r.isNested && ' (nested in MultiSend)'}
+                        </>
+                      ) : (
+                        <>
+                          Unknown address —{' '}
+                          <Address address={r.address} />
+                          {r.isNested && ' (nested in MultiSend)'}
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -402,7 +472,7 @@ export default function TransactionAnalysis() {
                     </div>
                     {customDecoded.main.explanation && (
                       <div className="text-sm text-gray-700 bg-white p-3 rounded">
-                        <AddressHighlighter text={customDecoded.main.explanation} safeAddress={address} />
+                        <AddressHighlighter text={customDecoded.main.explanation} />
                       </div>
                     )}
                   </div>
@@ -417,8 +487,8 @@ export default function TransactionAnalysis() {
                               <span className="font-semibold">{param.name}</span>
                               <span className="text-xs text-gray-500 font-mono">{param.type}</span>
                             </div>
-                            <div className="font-mono text-sm break-all bg-white p-3 rounded border">
-                              {typeof param.value === 'object' ? JSON.stringify(param.value, null, 2) : String(param.value)}
+                            <div className="text-sm break-all bg-white p-3 rounded border">
+                              <ParamValue type={param.type} value={param.value} />
                             </div>
                           </div>
                         ))}
@@ -455,7 +525,7 @@ export default function TransactionAnalysis() {
                             </div>
                             {call.explanation && (
                               <div className="text-sm text-gray-600 mb-2">
-                                <AddressHighlighter text={call.explanation} safeAddress={address} />
+                                <AddressHighlighter text={call.explanation} />
                               </div>
                             )}
                             {call.parameters.length > 0 && (
@@ -464,8 +534,8 @@ export default function TransactionAnalysis() {
                                   <div key={i} className="text-sm">
                                     <span className="font-semibold">{param.name}</span>
                                     <span className="text-gray-500"> ({param.type})</span>
-                                    <div className="font-mono text-xs bg-white p-2 rounded border mt-1 break-all">
-                                      {typeof param.value === 'object' ? JSON.stringify(param.value, null, 2) : String(param.value)}
+                                    <div className="text-xs bg-white p-2 rounded border mt-1 break-all">
+                                      <ParamValue type={param.type} value={param.value} />
                                     </div>
                                   </div>
                                 ))}
@@ -494,13 +564,9 @@ export default function TransactionAnalysis() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-indigo-900">MultiSend Batch</p>
-                          {multiSendVerification && (
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                              multiSendVerification.verified
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {multiSendVerification.verified ? '✓ Verified' : '⚠ Mismatch'}
+                          {multiSendVerification && !multiSendVerification.verified && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
+                              ⚠ Mismatch
                             </span>
                           )}
                         </div>
@@ -524,12 +590,9 @@ export default function TransactionAnalysis() {
                           <div className="text-sm space-y-2">
                             <div>
                               <span className="text-gray-600 font-medium">To:</span>
-                              <div className="font-mono text-xs mt-1 break-all">{item.tx.to}</div>
-                              {getAddressTag(item.tx.to as `0x${string}`) && (
-                                <span className="inline-block mt-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                  {getAddressTag(item.tx.to as `0x${string}`)!.label}
-                                </span>
-                              )}
+                              <div className="text-xs mt-1 break-all">
+                                <Address address={item.tx.to} />
+                              </div>
                             </div>
                             <div>
                               <span className="text-gray-600 font-medium">Value:</span> {item.tx.value.toString()} wei
@@ -550,7 +613,7 @@ export default function TransactionAnalysis() {
                             <p className="text-xs font-mono text-purple-600">{item.decoded.main.signature}</p>
                             {item.decoded.main.explanation && (
                               <div className="text-sm text-gray-700 mt-2">
-                                <AddressHighlighter text={item.decoded.main.explanation} safeAddress={address} />
+                                <AddressHighlighter text={item.decoded.main.explanation} />
                               </div>
                             )}
                           </div>
@@ -561,8 +624,8 @@ export default function TransactionAnalysis() {
                                 <div key={i} className="text-xs">
                                   <span className="font-semibold">{param.name}</span>
                                   <span className="text-gray-500"> ({param.type})</span>
-                                  <div className="font-mono bg-white p-2 rounded border mt-1 break-all">
-                                    {typeof param.value === 'object' ? JSON.stringify(param.value, null, 2) : String(param.value)}
+                                  <div className="bg-white p-2 rounded border mt-1 break-all">
+                                    <ParamValue type={param.type} value={param.value} />
                                   </div>
                                 </div>
                               ))}
@@ -588,13 +651,9 @@ export default function TransactionAnalysis() {
                           }`}>
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-semibold text-blue-900">Method: {item.apiDecoded.method}</p>
-                              {item.verification && (
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                                  item.verification.verified
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {item.verification.verified ? '✓ Verified' : '⚠ Mismatch'}
+                              {item.verification && !item.verification.verified && (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
+                                  ⚠ Mismatch
                                 </span>
                               )}
                             </div>
@@ -611,8 +670,8 @@ export default function TransactionAnalysis() {
                                 <div key={i} className="text-xs">
                                   <span className="font-semibold">{param.name}</span>
                                   <span className="text-gray-500"> ({param.type})</span>
-                                  <div className="font-mono bg-white p-2 rounded border mt-1 break-all">
-                                    {typeof param.value === 'object' ? JSON.stringify(param.value, null, 2) : String(param.value)}
+                                  <div className="bg-white p-2 rounded border mt-1 break-all">
+                                    <ParamValue type={param.type} value={param.value} />
                                   </div>
                                 </div>
                               ))}
@@ -637,13 +696,9 @@ export default function TransactionAnalysis() {
                   }`}>
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-blue-900">Method: {transaction.dataDecoded.method}</p>
-                      {apiDecodedVerification && (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                          apiDecodedVerification.verified
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {apiDecodedVerification.verified ? '✓ Verified' : '⚠ Mismatch'}
+                      {apiDecodedVerification && !apiDecodedVerification.verified && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
+                          ⚠ Mismatch
                         </span>
                       )}
                     </div>
@@ -664,8 +719,8 @@ export default function TransactionAnalysis() {
                               <span className="font-semibold">{param.name}</span>
                               <span className="text-xs text-gray-500 font-mono">{param.type}</span>
                             </div>
-                            <div className="font-mono text-sm break-all bg-white p-3 rounded border">
-                              {typeof param.value === 'object' ? JSON.stringify(param.value, null, 2) : String(param.value)}
+                            <div className="text-sm break-all bg-white p-3 rounded border">
+                              <ParamValue type={param.type} value={param.value} />
                             </div>
                           </div>
                         ))}
@@ -679,12 +734,9 @@ export default function TransactionAnalysis() {
               <div className="border-t pt-4 space-y-3 text-sm">
                 <div>
                   <span className="text-gray-600 font-medium">To Address:</span>
-                  <div className="font-mono text-xs mt-1 break-all">{transaction.to}</div>
-                  {getAddressTag(transaction.to as `0x${string}`) && (
-                    <span className="inline-block mt-1 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                      {getAddressTag(transaction.to as `0x${string}`)!.label}
-                    </span>
-                  )}
+                  <div className="text-xs mt-1 break-all">
+                    <Address address={transaction.to} />
+                  </div>
                 </div>
                 <div>
                   <span className="text-gray-600 font-medium">Value:</span> {transaction.value} wei

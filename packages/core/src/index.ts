@@ -9,9 +9,12 @@
 
 export * from './utils/format.js'
 export * from './utils/address-tags.js'
+export * from './utils/address-book.js'
+export * from './utils/extract-addresses.js'
 export * from './utils/verify-decoded.js'
 export * from './types.js'
 export * from './api/networks.js'
+export * from './contracts/index.js'
 export * from './api/safe-client.js'
 export * from './decoders/types.js'
 export * from './decoders/registry.js'

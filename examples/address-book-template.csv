@@ -1,0 +1,6 @@
+address,label,verification_date,status
+0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,Sky LockstakeEngine (staking),2026-05-01,active
+0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,WETH (wrap/unwrap operations),2026-05-01,active
+0xdAC17F958D2ee523a2206206994597C13D831ec7,Vendor: Example Payments LLC,2026-04-15,active
+0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,Vendor: Contractor Studio (former),2025-11-20,inactive
+0x6B175474E89094C44Da98b954EedeAC495271d0F,Treasury Cold Storage,2026-05-10,active

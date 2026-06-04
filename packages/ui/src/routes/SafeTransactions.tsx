@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { SafeApiClient, type SafeApiMultisigTransaction, getSafeUrl, getEtherscanAddressUrl } from '@shield3/sky-safe-core';
+import { Address } from '../components/Address';
+import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
 export default function SafeTransactions() {
-  const params = useParams<{ address: string; network: string }>();
-  const address = params.address!;
-  const network = params.network!;
+  // network + safeAddress come from SafeRouteProvider — no manual useParams,
+  // no manual loadNetworkContracts.
+  const { network, safeAddress } = useSafeRoute();
+  const address = safeAddress;
   const navigate = useNavigate();
 
   const [transactions, setTransactions] = useState<SafeApiMultisigTransaction[]>([]);
@@ -93,7 +96,7 @@ export default function SafeTransactions() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold mb-2">Safe Transactions</h2>
-            <p className="text-gray-600 text-sm mb-1">Safe: {address}</p>
+            <p className="text-gray-600 text-sm mb-1">Safe: <Address address={address} /></p>
             <p className="text-gray-600 text-sm">Network: {network}</p>
           </div>
           <div className="flex gap-2">
@@ -187,7 +190,7 @@ export default function SafeTransactions() {
                   <div className="space-y-1 text-sm">
                     <div>
                       <span className="text-gray-600">To:</span>{' '}
-                      <span className="font-mono">{tx.to}</span>
+                      <Address address={tx.to} />
                     </div>
                     <div>
                       <span className="text-gray-600">Value:</span> {tx.value} wei
