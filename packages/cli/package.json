@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-cli",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "CLI for Safe transaction hash calculation and verification",
   "type": "module",
   "bin": {
@@ -37,17 +37,17 @@
   },
   "dependencies": {
     "@shield3/sky-safe-core": "workspace:*",
-    "chalk": "5.3.0",
+    "chalk": "5.6.2",
     "commander": "11.1.0",
     "inquirer": "12.11.1",
-    "ora": "8.0.1",
-    "viem": "2.7.0"
+    "ora": "8.2.0",
+    "viem": "2.52.2"
   },
   "devDependencies": {
     "@types/inquirer": "9.0.9",
-    "@types/node": "20.19.0",
-    "tsx": "4.7.0",
-    "typescript": "5.3.3",
-    "vitest": "2.0.0"
+    "@types/node": "20.19.41",
+    "tsx": "4.22.4",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9"
   }
 }

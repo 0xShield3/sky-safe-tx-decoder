@@ -14,6 +14,10 @@ import {
   getAddressTag,
   getAddressTags,
 } from './address-tags.js';
+import { loadNetworkContracts, clearNetworkContracts } from '../contracts/index.js';
+
+// Sky LockstakeEngine — a per-network built-in (loaded for ethereum).
+const LOCKSTAKE_ENGINE = '0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3' as `0x${string}`;
 
 const VALID = [
   'address,label,verification_date,status',
@@ -24,6 +28,7 @@ const VALID = [
 
 beforeEach(() => {
   clearAddressBookTags();
+  clearNetworkContracts();
 });
 
 describe('parseAddressBookCsv', () => {
@@ -124,9 +129,10 @@ describe('loadAddressBookCsv', () => {
     expect(tag?.status).toBe('active');
   });
 
-  it('coexists with built-in tags (getAddressTags returns both)', () => {
+  it('coexists with network built-in tags (getAddressTags returns both)', () => {
+    loadNetworkContracts('ethereum');
     loadAddressBookCsv(VALID);
-    const tags = getAddressTags('0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3' as `0x${string}`);
+    const tags = getAddressTags(LOCKSTAKE_ENGINE);
     expect(tags).toHaveLength(2);
     expect(tags.map((t) => t.source).sort()).toEqual(['address-book', 'built-in']);
   });
@@ -144,11 +150,12 @@ describe('loadAddressBookCsv', () => {
   });
 
   it('unloadAddressBook clears only address-book entries, not built-ins', () => {
+    loadNetworkContracts('ethereum');
     loadAddressBookCsv(VALID);
     unloadAddressBook();
     expect(getAddressBookEntries()).toHaveLength(0);
-    // Built-in still resolves
-    const tag = getAddressTag('0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3' as `0x${string}`);
+    // Network built-in still resolves.
+    const tag = getAddressTag(LOCKSTAKE_ENGINE);
     expect(tag?.source).toBe('built-in');
     expect(tag?.label).toBe('LockstakeEngine');
   });

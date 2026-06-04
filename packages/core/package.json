@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Core Safe transaction hash calculation and decoding logic",
   "type": "module",
   "main": "./dist/index.js",
@@ -33,11 +33,11 @@
     "access": "public"
   },
   "dependencies": {
-    "viem": "2.7.0"
+    "viem": "2.52.2"
   },
   "devDependencies": {
-    "@types/node": "20.19.0",
-    "typescript": "5.3.3",
-    "vitest": "2.0.0"
+    "@types/node": "20.19.41",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9"
   }
 }
