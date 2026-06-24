@@ -269,7 +269,7 @@ export function printNetworkConfig(network: string, chainId: number): void {
  * Print safe transaction hash
  */
 export function printSafeTxHash(hash: string): void {
-  printHeader('Safe Transaction Hash')
+  printHeader('safeTxHash')
   console.log(chalk.green(hash))
 }
 
@@ -296,10 +296,10 @@ export function printHashVerification(
   console.log(chalk.dim('\nMessage Hash:'))
   console.log(chalk.green(messageHash))
 
-  console.log(chalk.dim('\nSafe Transaction Hash (Calculated):'))
+  console.log(chalk.dim('\nsafeTxHash (Calculated):'))
   console.log(chalk.green(calculatedHash))
 
-  console.log(chalk.dim('\nSafe Transaction Hash (API):'))
+  console.log(chalk.dim('\nsafeTxHash (API):'))
   console.log(chalk.green(apiHash))
 
   // Verification result

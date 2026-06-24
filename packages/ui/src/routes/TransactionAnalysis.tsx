@@ -836,6 +836,18 @@ export default function TransactionAnalysis() {
 
             <div className="space-y-4">
               <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Domain Hash:</p>
+                <div className="bg-gray-900 p-3 rounded-lg">
+                  <p className="font-mono text-green-400 text-xs break-all">
+                    {hashes.domainHash}
+                  </p>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Unique per Safe. EIP-712 domain separator.
+                </p>
+              </div>
+
+              <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Message Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
                   <p className="font-mono text-green-400 text-xs break-all">
@@ -848,7 +860,7 @@ export default function TransactionAnalysis() {
               </div>
 
               <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Safe Transaction Hash:</p>
+                <p className="text-sm font-semibold text-gray-700 mb-2">safeTxHash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
                   <p className="font-mono text-green-400 text-xs break-all">
                     {hashes.safeTxHash}
@@ -856,18 +868,6 @@ export default function TransactionAnalysis() {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Unique per transaction per Safe. Shown on some devices.
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Domain Separator Hash:</p>
-                <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">
-                    {hashes.domainHash}
-                  </p>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Unique per Safe. EIP-712 domain separator (rarely shown alone).
                 </p>
               </div>
             </div>
