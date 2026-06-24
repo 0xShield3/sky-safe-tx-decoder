@@ -1,0 +1,113 @@
+/**
+ * Global banner shown when the Safe currently being viewed is not in the
+ * signer's My Safes list. Lets them label it, add it to the in-session list,
+ * and re-export My Safes (the external source of truth they keep).
+ *
+ * Mounted once in App.tsx, just under the address-config bar. Reads the active
+ * Safe from the router via useMatch, so it works on any /safe/... page.
+ *
+ * Per the never-truncate rule, the full Safe address is always rendered.
+ */
+
+import { useState } from 'react';
+import { useMatch } from 'react-router-dom';
+import { isNetworkSupported, serializeAddressBookCsv, type AddressBookSafe } from '@shield3/sky-safe-core';
+import { useAddressBook } from './AddressBookContext';
+import { downloadCsv } from './download';
+
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+function safeKey(network: string, address: string): string {
+  return `${network}:${address.toLowerCase()}`;
+}
+
+export function UnsavedSafePrompt() {
+  const { mySafes, addSafe } = useAddressBook();
+  const match = useMatch('/safe/:network/:address/*');
+  const [label, setLabel] = useState('');
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  const network = match?.params.network ?? '';
+  const address = match?.params.address ?? '';
+
+  // Only offer capture for a well-formed address on a supported network.
+  if (!ADDRESS_PATTERN.test(address) || !isNetworkSupported(network)) {
+    return null;
+  }
+
+  const key = safeKey(network, address);
+  const alreadySaved = (mySafes?.safes ?? []).some(
+    (s) => s.network === network && s.address.toLowerCase() === address.toLowerCase()
+  );
+  if (alreadySaved || dismissed.has(key)) {
+    return null;
+  }
+
+  const trimmedLabel = label.trim();
+
+  const handleAddAndExport = () => {
+    if (!trimmedLabel) return;
+    const safe: AddressBookSafe = {
+      address: address as `0x${string}`,
+      label: trimmedLabel,
+      verificationDate: '', // visited, not verified — left blank intentionally
+      status: 'active',
+      network,
+    };
+    addSafe(safe);
+
+    // Build the export from current My Safes + this Safe directly: addSafe's
+    // state update is async, so reading it back here would miss the new entry.
+    const lcAddr = address.toLowerCase();
+    const safes = [
+      ...(mySafes?.safes ?? []).filter((s) => !(s.network === network && s.address.toLowerCase() === lcAddr)),
+      safe,
+    ];
+    downloadCsv(
+      mySafes?.filename ?? 'my-safes.csv',
+      serializeAddressBookCsv({ entries: [], safes }, { kind: 'my-safes' })
+    );
+    setLabel('');
+  };
+
+  return (
+    <div className="border-b bg-amber-50">
+      <div className="container mx-auto px-4 py-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className="min-w-0">
+            <span className="font-semibold">This Safe isn't in My Safes.</span>{' '}
+            <span className="font-mono">{network}</span> <span className="font-mono break-all">{address}</span>
+            <span className="block text-xs text-amber-800">Add it and re-export to save it to your My Safes CSV.</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <input
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Label this Safe…"
+              className="px-2 py-1 border border-amber-300 rounded text-sm bg-white focus:ring-2 focus:ring-amber-500"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddAndExport();
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleAddAndExport}
+              disabled={!trimmedLabel}
+              className="text-xs px-2 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add to My Safes &amp; export
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissed((prev) => new Set(prev).add(key))}
+              className="text-xs px-2 py-1 bg-white border border-amber-400 text-amber-800 rounded hover:bg-amber-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

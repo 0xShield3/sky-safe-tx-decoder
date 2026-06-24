@@ -1,47 +1,93 @@
 /**
- * Address Book session state.
+ * Address config session state — two independent files:
  *
- * Intentionally in-memory only — no localStorage. Each session a signer
- * drags a fresh CSV in, which forces re-pull from the trusted source and
- * prevents a stale or tampered cached copy from drifting unnoticed.
+ *   - Address book (managed): labels for known addresses, owned/updated by the
+ *     team. Read-only in the app; drop a fresh file anytime to replace it.
+ *   - My Safes (personal): the signer's own Safe shortcuts (the home dropdown).
+ *     The only file that is edited (capture/remove) and exported.
  *
- * If a team later wants persistence, swap the useState below for
- * useLocalStorage and add a "Loaded: <timestamp>" indicator to the header.
+ * Keeping them separate avoids a sync trap: updating the managed book never
+ * touches your Safes, and capturing a Safe never forces you to re-merge the
+ * book. Both are in-memory only (no localStorage); the files you keep externally
+ * are the source of truth and are re-loaded each session.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  loadAddressBookCsv,
-  unloadAddressBook,
+  buildAddressBookTag,
+  classifyConfigCsv,
+  clearAddressBookTags,
+  parseAddressBookCsv,
+  registerAddressTag,
+  serializeAddressBookCsv,
   type AddressBookEntry,
+  type AddressBookSafe,
   type AddressBookSkippedRow,
 } from '@shield3/sky-safe-core';
 
-interface AddressBookState {
+export interface AddressBookSlot {
   entries: AddressBookEntry[];
   skipped: AddressBookSkippedRow[];
   filename: string;
   loadedAt: Date;
 }
 
+export interface MySafesSlot {
+  safes: AddressBookSafe[];
+  skipped: AddressBookSkippedRow[];
+  filename: string;
+  loadedAt: Date;
+}
+
 interface AddressBookContextValue {
-  state: AddressBookState | null;
-  /** True when a book is loaded (any entries). Drives default rendering decisions. */
-  loaded: boolean;
-  /** Parse + register a CSV from the given file. Throws on schema errors. */
-  load: (file: File) => Promise<void>;
-  clear: () => void;
+  /** Managed address book (labels). Read-only. */
+  addressBook: AddressBookSlot | null;
+  /** Personal Safe shortcuts. Editable + exportable. */
+  mySafes: MySafesSlot | null;
+  /** Load a managed address-book CSV. Throws if the file is the wrong kind. */
+  loadAddressBook: (file: File) => Promise<void>;
+  /** Load a personal My Safes CSV. Throws if the file is the wrong kind. */
+  loadMySafes: (file: File) => Promise<void>;
+  clearAddressBook: () => void;
+  clearMySafes: () => void;
+  /** Add (or update, last-wins) a Safe shortcut in My Safes. */
+  addSafe: (safe: AddressBookSafe) => void;
+  /** Remove a Safe shortcut by network + address. */
+  removeSafe: (network: string, address: string) => void;
+  /** Serialize My Safes back to CSV (with kind marker). */
+  exportMySafes: () => string;
 }
 
 const AddressBookContext = createContext<AddressBookContextValue | null>(null);
 
-export function AddressBookProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AddressBookState | null>(null);
+function lc(address: string): string {
+  return address.toLowerCase();
+}
 
-  const load = useCallback(async (file: File) => {
+export function AddressBookProvider({ children }: { children: ReactNode }) {
+  const [addressBook, setAddressBook] = useState<AddressBookSlot | null>(null);
+  const [mySafes, setMySafes] = useState<MySafesSlot | null>(null);
+
+  // Rebuild the shared address-book tag bucket from BOTH sources whenever
+  // either slot changes. Centralizing here lets the two files coexist instead
+  // of clobbering each other's tags.
+  useEffect(() => {
+    clearAddressBookTags();
+    for (const e of addressBook?.entries ?? []) registerAddressTag(e.address, buildAddressBookTag(e));
+    for (const s of mySafes?.safes ?? []) registerAddressTag(s.address, buildAddressBookTag(s));
+  }, [addressBook, mySafes]);
+
+  const loadAddressBook = useCallback(async (file: File) => {
     const text = await file.text();
-    const result = loadAddressBookCsv(text);
-    setState({
+    const { kind } = classifyConfigCsv(text);
+    if (kind === 'my-safes') {
+      throw new Error('This looks like a "My Safes" file (Safe rows). Load it under My Safes, not Address book.');
+    }
+    if (kind === 'mixed') {
+      throw new Error('Address book files should contain only address labels, but this file also has Safe rows.');
+    }
+    const result = parseAddressBookCsv(text);
+    setAddressBook({
       entries: result.entries,
       skipped: result.skipped,
       filename: file.name,
@@ -49,19 +95,67 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const clear = useCallback(() => {
-    unloadAddressBook();
-    setState(null);
+  const loadMySafes = useCallback(async (file: File) => {
+    const text = await file.text();
+    const { kind } = classifyConfigCsv(text);
+    if (kind === 'address-book') {
+      throw new Error(
+        'This looks like an Address book file (address labels). Load it under Address book, not My Safes.'
+      );
+    }
+    if (kind === 'mixed') {
+      throw new Error('My Safes files should contain only Safe rows, but this file also has address labels.');
+    }
+    const result = parseAddressBookCsv(text);
+    setMySafes({
+      safes: result.safes,
+      skipped: result.skipped,
+      filename: file.name,
+      loadedAt: new Date(),
+    });
+  }, []);
+
+  const clearAddressBook = useCallback(() => setAddressBook(null), []);
+  const clearMySafes = useCallback(() => setMySafes(null), []);
+
+  const addSafe = useCallback((safe: AddressBookSafe) => {
+    setMySafes((prev) => {
+      const base: MySafesSlot = prev ?? {
+        safes: [],
+        skipped: [],
+        filename: 'my-safes.csv',
+        loadedAt: new Date(),
+      };
+      const key = lc(safe.address);
+      const safes = [...base.safes];
+      const idx = safes.findIndex((s) => s.network === safe.network && lc(s.address) === key);
+      if (idx >= 0) safes[idx] = safe;
+      else safes.push(safe);
+      return { ...base, safes };
+    });
+  }, []);
+
+  const removeSafe = useCallback((network: string, address: string) => {
+    setMySafes((prev) => {
+      if (!prev) return prev;
+      const key = lc(address);
+      return { ...prev, safes: prev.safes.filter((s) => !(s.network === network && lc(s.address) === key)) };
+    });
   }, []);
 
   const value = useMemo<AddressBookContextValue>(
     () => ({
-      state,
-      loaded: state !== null && state.entries.length > 0,
-      load,
-      clear,
+      addressBook,
+      mySafes,
+      loadAddressBook,
+      loadMySafes,
+      clearAddressBook,
+      clearMySafes,
+      addSafe,
+      removeSafe,
+      exportMySafes: () => serializeAddressBookCsv({ entries: [], safes: mySafes?.safes ?? [] }, { kind: 'my-safes' }),
     }),
-    [state, load, clear]
+    [addressBook, mySafes, loadAddressBook, loadMySafes, clearAddressBook, clearMySafes, addSafe, removeSafe]
   );
 
   return <AddressBookContext.Provider value={value}>{children}</AddressBookContext.Provider>;

@@ -31,15 +31,16 @@ function pickBook(tags: AddressTag[]): AddressTag | undefined {
 }
 
 export function Address({ address, safeAddress, className = '' }: AddressProps) {
-  const { loaded: bookLoaded } = useAddressBook();
+  // The unknown-address tint only makes sense when we have a managed list of
+  // known addresses to compare against (the address book).
+  const { addressBook } = useAddressBook();
+  const bookLoaded = addressBook !== null;
   const routeCtx = useOptionalSafeRoute();
   // NEVER truncate — signers must see the full address to detect spoofs.
   const display = address;
 
   const effectiveSafe = safeAddress ?? routeCtx?.safeAddress;
-  const isSafe =
-    effectiveSafe !== undefined &&
-    address.toLowerCase() === effectiveSafe.toLowerCase();
+  const isSafe = effectiveSafe !== undefined && address.toLowerCase() === effectiveSafe.toLowerCase();
 
   if (isSafe) {
     return (
@@ -65,22 +66,21 @@ export function Address({ address, safeAddress, className = '' }: AddressProps) 
         title={`INACTIVE in address book — verified ${book.verificationDate || 'n/a'}`}
       >
         {display}
-        <span className="text-xs bg-red-600 text-white px-1 rounded font-semibold">
-          INACTIVE: {book.label}
-        </span>
+        <span className="text-xs bg-red-600 text-white px-1 rounded font-semibold">INACTIVE: {book.label}</span>
       </span>
     );
   }
 
-  // Both built-in and address-book entry — show both labels.
+  // Both built-in and address-book entry — collapse to a single verified badge
+  // showing the signer's label; the built-in protocol name moves to the tooltip
+  // to avoid a redundant double badge.
   if (builtIn && book) {
     return (
       <span
         className={`inline-flex items-center gap-1 bg-green-50 text-green-900 border border-green-300 px-1 rounded font-mono ${className}`}
-        title={`${builtIn.description} • Address book: ${book.label} (verified ${book.verificationDate || 'n/a'})`}
+        title={`${builtIn.label} — ${builtIn.description} • verified ${book.verificationDate || 'n/a'}`}
       >
         {display}
-        <span className="text-xs bg-gray-200 text-gray-800 px-1 rounded">{builtIn.label}</span>
         <span className="text-xs bg-green-200 px-1 rounded">✓ {book.label}</span>
       </span>
     );
@@ -102,10 +102,7 @@ export function Address({ address, safeAddress, className = '' }: AddressProps) 
   // Built-in only — show the protocol label.
   if (builtIn) {
     return (
-      <span
-        className={`inline-flex items-center gap-1 font-mono ${className}`}
-        title={builtIn.description}
-      >
+      <span className={`inline-flex items-center gap-1 font-mono ${className}`} title={builtIn.description}>
         {display}
         <span className="text-xs bg-gray-200 text-gray-800 px-1 rounded">{builtIn.label}</span>
       </span>

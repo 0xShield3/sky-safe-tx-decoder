@@ -33,9 +33,9 @@ const result = calculateSafeTxHash(
   '1.3.0' // Safe version
 )
 
-console.log(result.safeTxHash)  // Hash to verify on hardware wallet
 console.log(result.domainHash)  // EIP-712 domain separator
 console.log(result.messageHash) // Transaction message hash
+console.log(result.safeTxHash)  // Hash to verify on hardware wallet
 ```
 
 ### Verify Decoded Data

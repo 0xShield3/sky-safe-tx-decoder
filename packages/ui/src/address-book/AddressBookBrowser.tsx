@@ -1,25 +1,33 @@
 /**
- * Modal that lists the currently loaded address-book entries.
+ * Modal that lists one loaded config file (address book OR My Safes).
  * Surfaces parser-skipped rows too, so a signer can spot bad rows.
  */
 
 import { useEffect } from 'react';
-import type {
-  AddressBookEntry,
-  AddressBookSkippedRow,
-} from '@shield3/sky-safe-core';
+import type { AddressBookEntry, AddressBookSafe, AddressBookSkippedRow } from '@shield3/sky-safe-core';
+import { EntryTable, SafeTable } from './tables';
 
 interface AddressBookBrowserProps {
-  state: {
-    entries: AddressBookEntry[];
-    skipped: AddressBookSkippedRow[];
-    filename: string;
-    loadedAt: Date;
-  };
+  title: string;
+  filename: string;
+  loadedAt: Date;
+  /** Present when viewing an address book. */
+  entries?: AddressBookEntry[];
+  /** Present when viewing My Safes. */
+  safes?: AddressBookSafe[];
+  skipped: AddressBookSkippedRow[];
   onClose: () => void;
 }
 
-export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) {
+export function AddressBookBrowser({
+  title,
+  filename,
+  loadedAt,
+  entries,
+  safes,
+  skipped,
+  onClose,
+}: AddressBookBrowserProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -28,8 +36,9 @@ export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) 
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const active = state.entries.filter((e) => e.status === 'active');
-  const inactive = state.entries.filter((e) => e.status === 'inactive');
+  const active = (entries ?? []).filter((e) => e.status === 'active');
+  const inactive = (entries ?? []).filter((e) => e.status === 'inactive');
+  const safeRows = safes ?? [];
 
   return (
     <div
@@ -44,9 +53,9 @@ export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) 
       >
         <div className="px-5 py-3 border-b flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Address Book</h2>
+            <h2 className="text-lg font-semibold">{title}</h2>
             <p className="text-xs text-gray-600 font-mono">
-              {state.filename} · loaded {state.loadedAt.toLocaleString()}
+              {filename} · loaded {loadedAt.toLocaleString()}
             </p>
           </div>
           <button
@@ -60,27 +69,37 @@ export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) 
         </div>
 
         <div className="overflow-y-auto px-5 py-4 space-y-5">
-          <section>
-            <h3 className="text-sm font-semibold text-green-800 mb-2">
-              Active ({active.length})
-            </h3>
-            <EntryTable entries={active} />
-          </section>
-
-          {inactive.length > 0 && (
+          {safes !== undefined && (
             <section>
-              <h3 className="text-sm font-semibold text-red-800 mb-2">
-                Inactive ({inactive.length})
-              </h3>
-              <EntryTable entries={inactive} />
+              <h3 className="text-sm font-semibold text-blue-800 mb-2">Safe Shortcuts ({safeRows.length})</h3>
+              <SafeTable
+                safes={[
+                  ...safeRows.filter((s) => s.status === 'active'),
+                  ...safeRows.filter((s) => s.status === 'inactive'),
+                ]}
+              />
             </section>
           )}
 
-          {state.skipped.length > 0 && (
+          {entries !== undefined && (
+            <>
+              <section>
+                <h3 className="text-sm font-semibold text-green-800 mb-2">Active ({active.length})</h3>
+                <EntryTable entries={active} />
+              </section>
+
+              {inactive.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-semibold text-red-800 mb-2">Inactive ({inactive.length})</h3>
+                  <EntryTable entries={inactive} />
+                </section>
+              )}
+            </>
+          )}
+
+          {skipped.length > 0 && (
             <section>
-              <h3 className="text-sm font-semibold text-yellow-800 mb-2">
-                Skipped rows ({state.skipped.length})
-              </h3>
+              <h3 className="text-sm font-semibold text-yellow-800 mb-2">Skipped rows ({skipped.length})</h3>
               <div className="border border-yellow-200 bg-yellow-50 rounded">
                 <table className="w-full text-xs">
                   <thead>
@@ -91,11 +110,11 @@ export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) 
                     </tr>
                   </thead>
                   <tbody>
-                    {state.skipped.map((r, idx) => (
+                    {skipped.map((r, idx) => (
                       <tr key={idx} className="border-b border-yellow-100 last:border-0">
                         <td className="px-3 py-2 font-mono">{r.row}</td>
                         <td className="px-3 py-2">{r.reason}</td>
-                        <td className="px-3 py-2 font-mono truncate max-w-xs">{r.raw}</td>
+                        <td className="px-3 py-2 font-mono break-all">{r.raw}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -105,36 +124,6 @@ export function AddressBookBrowser({ state, onClose }: AddressBookBrowserProps) 
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function EntryTable({ entries }: { entries: AddressBookEntry[] }) {
-  if (entries.length === 0) {
-    return <p className="text-xs text-gray-500">None.</p>;
-  }
-  return (
-    <div className="border rounded overflow-hidden">
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-left bg-gray-50 border-b">
-            <th className="px-3 py-2">Address</th>
-            <th className="px-3 py-2">Label</th>
-            <th className="px-3 py-2 w-32">Verified</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <tr key={e.address} className="border-b last:border-0 hover:bg-gray-50">
-              <td className="px-3 py-2 font-mono break-all">{e.address}</td>
-              <td className="px-3 py-2">{e.label}</td>
-              <td className="px-3 py-2 font-mono text-gray-600">
-                {e.verificationDate || '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }

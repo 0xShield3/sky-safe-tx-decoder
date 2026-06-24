@@ -52,6 +52,70 @@ pnpm install
 pnpm --filter @shield3/sky-safe-ui dev
 ```
 
+#### Offline single-file build
+
+For the highest-assurance setup — no hosting provider, no server, no `npm` to
+run — build a single self-contained HTML file you open directly in a browser:
+
+```bash
+pnpm install
+pnpm --filter @shield3/sky-safe-ui build:offline
+# → packages/ui/dist-offline/index.html  (double-click to open)
+```
+
+Everything (JS + CSS) is inlined into that one file, so it runs from `file://`
+with no external requests for app code. Audit it once, optionally pin its hash,
+and run it from disk — the verification code is yours, not re-served by a CDN on
+every visit. It still fetches transaction data from the Safe Transaction Service
+API, so an internet connection is required; only the app code is local.
+
+#### Address Config CSVs
+
+The web UI loads two **independent**, session-only CSV files by drag-and-drop.
+They share one schema but play different roles, so updating one never disturbs
+the other:
+
+| File | Role | In the app |
+| ---- | ---- | ---------- |
+| **Address book** | Managed externally (team-owned). Labels known addresses during review. | Read-only. Replace by loading a fresh file. |
+| **My Safes** | Your personal Safe shortcuts (the home-page dropdown). | Editable (add/remove) and exportable. |
+
+Each file self-identifies with a marker comment on the first line, so the UI can
+reject a file dropped on the wrong slot:
+
+```csv
+# sky-safe-config: address-book
+type,network,address,label,verification_date,status
+address,,0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,Sky LockstakeEngine,2026-05-01,active
+```
+
+```csv
+# sky-safe-config: my-safes
+type,network,address,label,verification_date,status
+safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active
+```
+
+See [`examples/address-book-template.csv`](examples/address-book-template.csv)
+and [`examples/my-safes-template.csv`](examples/my-safes-template.csv). Older
+address books with only `address,label,verification_date,status` still load.
+
+Config is kept in memory for the current browser session and is **not** persisted
+to local storage — the CSV files you keep externally are the source of truth.
+This is intentional for a signing tool: a cached copy could be silently tampered
+with or drift stale, so each session you re-load fresh files.
+
+##### Managing My Safes
+
+- **Settings page** (top-right link): review both files, remove individual
+  Safes, and export My Safes back to CSV.
+- **Export** (config bar or Settings): writes My Safes as a CSV that re-imports
+  exactly (round-trip), with the kind marker.
+- **Capture an unsaved Safe**: when you open a Safe that isn't in My Safes, a
+  banner offers to label it, add it to the session, and re-export My Safes so
+  you can save it back to your file. Because the address book and My Safes are
+  separate files, you can update the managed address book anytime without losing
+  your Safes.
+
 ### From Source
 
 ```bash
@@ -69,11 +133,11 @@ pnpm --filter @shield3/sky-safe-ui dev
 
 ## Supported Networks
 
-| Network | Chain ID |
-|---------|----------|
-| Ethereum Mainnet | 1 |
-| Base | 8453 |
-| Sepolia Testnet | 11155111 |
+| Network          | Chain ID |
+| ---------------- | -------- |
+| Ethereum Mainnet | 1        |
+| Base             | 8453     |
+| Sepolia Testnet  | 11155111 |
 
 ## Project Structure
 
@@ -87,6 +151,7 @@ packages/
 ## Security Analysis
 
 The tool detects:
+
 - **Untrusted delegate calls** - Flags delegate calls to contracts not on the trusted list
 - **Gas token attacks** - Custom gas token + custom refund receiver combinations
 - **Owner/threshold modifications** - Direct and nested (via MultiSend) changes to Safe owners
@@ -108,10 +173,10 @@ sky-safe verify --file examples/multiple-issues.json
 
 The decoder registry provides protocol-specific human-readable transaction explanations. Currently included:
 
-| Protocol | Contract | Functions |
-|----------|----------|-----------|
+| Protocol                     | Contract                                     | Functions                                           |
+| ---------------------------- | -------------------------------------------- | --------------------------------------------------- |
 | Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 (urn management, staking, borrowing, delegation) |
-| MultiSend | Standard Safe MultiSend | Batch transaction decoding |
+| MultiSend                    | Standard Safe MultiSend                      | Batch transaction decoding                          |
 
 See the [core package README](packages/core/README.md#creating-a-custom-decoder) for how to add your own.
 
@@ -138,6 +203,7 @@ cd ../cli && pnpm pack && npm publish shield3-sky-safe-cli-*.tgz --access public
 ## Trust Assumptions
 
 Users must trust:
+
 - This TypeScript implementation
 - [viem](https://viem.sh) cryptographic library
 - Safe Transaction Service API data — however, the tool independently re-encodes decoded parameters and verifies they match the raw calldata and EIP-712 hashes, so API-provided decoded data is not blindly trusted

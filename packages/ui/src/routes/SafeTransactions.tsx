@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SafeApiClient, type SafeApiMultisigTransaction, getSafeUrl, getEtherscanAddressUrl } from '@shield3/sky-safe-core';
 import { Address } from '../components/Address';
+import { WeiValue } from '../components/WeiValue';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
 export default function SafeTransactions() {
@@ -193,7 +194,7 @@ export default function SafeTransactions() {
                       <Address address={tx.to} />
                     </div>
                     <div>
-                      <span className="text-gray-600">Value:</span> {tx.value} wei
+                      <span className="text-gray-600">Value:</span> <WeiValue value={tx.value} />
                     </div>
                     {tx.dataDecoded && (
                       <div>

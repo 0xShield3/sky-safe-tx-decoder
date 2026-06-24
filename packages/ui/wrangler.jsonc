@@ -1,0 +1,13 @@
+{
+  // Cloudflare Pages deploy config for the UI.
+  //
+  // From this directory: `wrangler pages deploy`
+  // From repo root:      `wrangler pages deploy --config packages/ui/wrangler.jsonc`
+  //
+  // The project itself (production branch, custom domains, env vars) is
+  // configured in the Cloudflare Pages dashboard — this file only captures
+  // the build-output path + project name so flags don't have to be repeated.
+  "name": "sky-safe-tx-decoder",
+  "compatibility_date": "2025-12-01",
+  "pages_build_output_dir": "./dist"
+}
