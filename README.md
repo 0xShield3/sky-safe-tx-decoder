@@ -52,6 +52,23 @@ pnpm install
 pnpm --filter @shield3/sky-safe-ui dev
 ```
 
+#### Offline single-file build
+
+For the highest-assurance setup — no hosting provider, no server, no `npm` to
+run — build a single self-contained HTML file you open directly in a browser:
+
+```bash
+pnpm install
+pnpm --filter @shield3/sky-safe-ui build:offline
+# → packages/ui/dist-offline/index.html  (double-click to open)
+```
+
+Everything (JS + CSS) is inlined into that one file, so it runs from `file://`
+with no external requests for app code. Audit it once, optionally pin its hash,
+and run it from disk — the verification code is yours, not re-served by a CDN on
+every visit. It still fetches transaction data from the Safe Transaction Service
+API, so an internet connection is required; only the app code is local.
+
 #### Address Config CSVs
 
 The web UI loads two **independent**, session-only CSV files by drag-and-drop.

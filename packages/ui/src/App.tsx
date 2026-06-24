@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import Home from './routes/Home';
 import SafeTransactions from './routes/SafeTransactions';
 import TransactionAnalysis from './routes/TransactionAnalysis';
@@ -12,7 +12,7 @@ import './globals.css';
 export default function App() {
   return (
     <AddressBookProvider>
-      <BrowserRouter>
+      <HashRouter>
         <div className="antialiased min-h-screen flex flex-col">
           <header className="border-b">
             <div className="container mx-auto px-4 py-4 flex items-start justify-between gap-4">
@@ -49,7 +49,7 @@ export default function App() {
             </div>
           </footer>
         </div>
-      </BrowserRouter>
+      </HashRouter>
     </AddressBookProvider>
   );
 }
