@@ -23,6 +23,7 @@ import { AddressHighlighter } from '../components/AddressHighlighter';
 import { Address } from '../components/Address';
 import { ParamValue } from '../components/ParamValue';
 import { WeiValue } from '../components/WeiValue';
+import { HashHex } from '../components/HashHex';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
@@ -845,7 +846,7 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Domain Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">{hashes.domainHash}</p>
+                  <HashHex value={hashes.domainHash} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Unique per Safe. EIP-712 domain separator.</p>
               </div>
@@ -853,7 +854,7 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Message Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">{hashes.messageHash}</p>
+                  <HashHex value={hashes.messageHash} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Unique per transaction. Often shown on Ledger Nano S and similar smaller devices.
@@ -863,7 +864,7 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">safeTxHash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">{hashes.safeTxHash}</p>
+                  <HashHex value={hashes.safeTxHash} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Unique per transaction per Safe. Shown on some devices.</p>
               </div>
