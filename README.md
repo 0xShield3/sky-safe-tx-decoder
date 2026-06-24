@@ -71,21 +71,48 @@ API, so an internet connection is required; only the app code is local.
 
 ##### Verifying a release build
 
-Each tagged release attaches the offline `index.html`, its `.sha256`, and a
-keyless build-provenance attestation (Sigstore, via GitHub Actions). After
-downloading, you can verify the file before trusting it:
+This tool is what you use to decide whether to sign a transaction, so the
+integrity of the tool itself is security-critical: a tampered build could show
+"✓ hashes match" when they don't and trick you into signing. So a release isn't
+just a file you have to trust — it ships with a cryptographic proof of where it
+came from. Each tagged release attaches the offline `index.html`, its `.sha256`,
+and a keyless **build-provenance attestation**.
+
+Three independent layers, weakest to strongest:
+
+- **SHA-256 checksum — integrity.** Confirms the file wasn't altered versus the
+  published value. (On its own, weak: whoever can swap the file can change the
+  number next to it.)
+- **Build-provenance attestation — authenticity + origin.** Cryptographically
+  proves this exact file was produced by **GitHub Actions**, building **this
+  repo** at a **specific commit**, via the official release workflow — not from
+  someone's laptop or modified source. It is _keyless_ (signed by the workflow
+  run's verified identity via Sigstore + GitHub OIDC — no secret key a
+  maintainer could leak) and recorded in a public transparency log.
+- **Reproducible build — don't trust, verify.** The build is deterministic, so
+  you can rebuild from source and get a byte-identical file. You don't have to
+  trust the published binary at all.
+
+After downloading, verify before trusting:
 
 ```bash
-# Integrity (matches the published checksum)
+# Integrity — matches the published checksum
 shasum -a 256 -c sky-safe-tx-decoder-<tag>.html.sha256
 
 # Provenance — confirms GitHub Actions built this exact file from this repo/commit
 gh attestation verify sky-safe-tx-decoder-<tag>.html --repo 0xShield3/sky-safe-tx-decoder
+
+# Strongest — reproduce it yourself and compare the hash
+git checkout <tag>
+pnpm --filter @shield3/sky-safe-ui build:offline
+shasum -a 256 packages/ui/dist-offline/index.html   # should match the release
 ```
 
-For the strongest assurance, reproduce the build yourself: check out the tag, run
-`pnpm --filter @shield3/sky-safe-ui build:offline`, and confirm the sha256
-matches the release.
+This protects against a swapped or backdoored release file, a hand-uploaded
+build from a compromised maintainer account, and tampering between source and
+binary. It does **not** prove the source code itself is bug-free (audit or trust
+the code separately), and verification is a one-time check before you open the
+file — the browser doesn't re-check it at runtime.
 
 #### Address Config CSVs
 
