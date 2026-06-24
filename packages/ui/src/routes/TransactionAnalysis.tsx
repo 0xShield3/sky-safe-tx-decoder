@@ -67,6 +67,8 @@ export default function TransactionAnalysis() {
   const [loadingMessage, setLoadingMessage] = useState('Loading transaction...');
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'decoded' | 'raw'>('decoded');
+  // Hash display case — default uppercase to match Ledger and similar devices.
+  const [hashUppercase, setHashUppercase] = useState(true);
 
   useEffect(() => {
     const fetchAndAnalyze = async () => {
@@ -843,10 +845,29 @@ export default function TransactionAnalysis() {
             </div>
 
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <div className="inline-flex overflow-hidden rounded border border-gray-200 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setHashUppercase(true)}
+                    className={`px-2 py-0.5 ${hashUppercase ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    ABC
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHashUppercase(false)}
+                    className={`px-2 py-0.5 ${!hashUppercase ? 'bg-gray-100 text-gray-800' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    abc
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Domain Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <HashHex value={hashes.domainHash} className="text-sm" />
+                  <HashHex value={hashes.domainHash} uppercase={hashUppercase} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Unique per Safe. EIP-712 domain separator.</p>
               </div>
@@ -854,7 +875,7 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Message Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <HashHex value={hashes.messageHash} className="text-sm" />
+                  <HashHex value={hashes.messageHash} uppercase={hashUppercase} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Unique per transaction. Often shown on Ledger Nano S and similar smaller devices.
@@ -864,7 +885,7 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">safeTxHash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <HashHex value={hashes.safeTxHash} className="text-sm" />
+                  <HashHex value={hashes.safeTxHash} uppercase={hashUppercase} className="text-sm" />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Unique per transaction per Safe. Shown on some devices.</p>
               </div>

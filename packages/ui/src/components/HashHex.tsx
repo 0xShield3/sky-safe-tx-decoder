@@ -2,45 +2,57 @@
  * Renders a hash / hex string for character-by-character verification against a
  * hardware-wallet screen, applying common practices for reading long hex:
  *
- *   - fixed 6-character blocks (chunking)
- *   - alternating white / blue color by POSITION (not value), so the eye can
- *     track which block it's on
- *   - a gap splitting the value into two halves, each of which wraps as a whole
- *     unit (a block never straddles two lines)
- *   - monospace + a little letter-spacing for legibility
+ *   - fixed 4-character groups with whitespace between them (spatial chunking —
+ *     not relying on color alone), small enough to hold in working memory
+ *   - a larger gap splitting the value into two equal halves
+ *   - wrapping only at group / half boundaries, so a group never straddles lines
+ *   - alternating white / blue by POSITION (a secondary aid to track groups)
+ *   - monospace + letter-spacing for legibility
+ *   - optional uppercase to mirror what devices like Ledger display
  *
  * The full value is always rendered in order — never grouped away or truncated.
  */
 
 interface HashHexProps {
   value: string;
+  /** Uppercase the hex body (the 0x prefix stays lowercase), matching Ledger. */
+  uppercase?: boolean;
   className?: string;
 }
 
-const BLOCK = 6;
+const GROUP = 4;
 
-export function HashHex({ value, className = '' }: HashHexProps) {
-  const blocks: string[] = [];
-  for (let i = 0; i < value.length; i += BLOCK) {
-    blocks.push(value.slice(i, i + BLOCK));
+export function HashHex({ value, uppercase = true, className = '' }: HashHexProps) {
+  const hasPrefix = /^0x/i.test(value);
+  const rawBody = hasPrefix ? value.slice(2) : value;
+  const body = uppercase ? rawBody.toUpperCase() : rawBody.toLowerCase();
+
+  const groups: string[] = [];
+  for (let i = 0; i < body.length; i += GROUP) {
+    groups.push(body.slice(i, i + GROUP));
   }
-  const splitAt = Math.ceil(blocks.length / 2);
+  const splitAt = Math.ceil(groups.length / 2);
 
-  // Color by global block index so parity carries across the half gap.
-  const renderRange = (from: number, to: number) =>
-    blocks.slice(from, to).map((block, idx) => {
+  // Color by global group index so parity carries across the half gap.
+  const renderGroups = (from: number, to: number) =>
+    groups.slice(from, to).map((group, idx) => {
       const gi = from + idx;
       return (
         <span key={gi} className={gi % 2 === 1 ? 'text-sky-400' : 'text-gray-200'}>
-          {block}
+          {group}
         </span>
       );
     });
 
   return (
-    <span className={`inline-flex flex-wrap items-baseline gap-x-6 font-mono tracking-wide ${className}`}>
-      <span className="break-all">{renderRange(0, splitAt)}</span>
-      <span className="break-all">{renderRange(splitAt, blocks.length)}</span>
+    <span className={`inline-flex flex-wrap items-baseline gap-x-6 gap-y-1 font-mono tracking-wider ${className}`}>
+      <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        {hasPrefix && <span className="text-gray-200">0x</span>}
+        {renderGroups(0, splitAt)}
+      </span>
+      <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        {renderGroups(splitAt, groups.length)}
+      </span>
     </span>
   );
 }
