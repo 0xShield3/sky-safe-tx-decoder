@@ -16,6 +16,9 @@ export default defineConfig(({ mode }) => {
   const offline = mode === 'offline';
   return {
     base: offline ? './' : '/',
+    // Skip copying public/ in offline mode — its only file (_headers) is a
+    // Cloudflare-only directive, useless for a single file opened from disk.
+    publicDir: offline ? false : 'public',
     plugins: [react(), ...(offline ? [viteSingleFile()] : [])],
     resolve: {
       alias: {
