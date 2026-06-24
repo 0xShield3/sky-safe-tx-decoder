@@ -8,6 +8,7 @@
  */
 
 export * from './utils/format.js'
+export * from './utils/units.js'
 export * from './utils/address-tags.js'
 export * from './utils/address-book.js'
 export * from './utils/extract-addresses.js'

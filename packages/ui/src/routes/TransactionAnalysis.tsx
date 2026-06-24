@@ -22,6 +22,7 @@ import {
 import { AddressHighlighter } from '../components/AddressHighlighter';
 import { Address } from '../components/Address';
 import { ParamValue } from '../components/ParamValue';
+import { WeiValue } from '../components/WeiValue';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
@@ -594,7 +595,8 @@ export default function TransactionAnalysis() {
                               </div>
                             </div>
                             <div>
-                              <span className="text-gray-600 font-medium">Value:</span> {item.tx.value.toString()} wei
+                              <span className="text-gray-600 font-medium">Value:</span>{' '}
+                              <WeiValue value={item.tx.value} />
                             </div>
                             <div>
                               <span className="text-gray-600 font-medium">Operation:</span>{' '}
@@ -738,7 +740,7 @@ export default function TransactionAnalysis() {
                   </div>
                 </div>
                 <div>
-                  <span className="text-gray-600 font-medium">Value:</span> {transaction.value} wei
+                  <span className="text-gray-600 font-medium">Value:</span> <WeiValue value={transaction.value} />
                 </div>
                 <div>
                   <span className="text-gray-600 font-medium">Operation:</span>{' '}
