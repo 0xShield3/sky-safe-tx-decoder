@@ -2,11 +2,10 @@
  * Renders a hash / hex string for character-by-character verification against a
  * hardware-wallet screen, applying common practices for reading long hex:
  *
- *   - fixed 4-character groups with whitespace between them (spatial chunking —
- *     not relying on color alone), small enough to hold in working memory
- *   - a larger gap splitting the value into two equal halves
- *   - wrapping only at group / half boundaries, so a group never straddles lines
- *   - alternating white / blue by POSITION (a secondary aid to track groups)
+ *   - fixed 4-character blocks, alternating white / blue by POSITION (not value)
+ *     so the eye can track which block it's on (color-only chunking — no spaces
+ *     between blocks, by preference)
+ *   - a gap splitting the value into two equal halves
  *   - monospace + letter-spacing for legibility
  *   - optional uppercase to mirror what devices like Ledger display
  *
@@ -45,14 +44,12 @@ export function HashHex({ value, uppercase = true, className = '' }: HashHexProp
     });
 
   return (
-    <span className={`inline-flex flex-wrap items-baseline gap-x-6 gap-y-1 font-mono tracking-wider ${className}`}>
-      <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
+    <span className={`inline-flex flex-wrap items-baseline gap-x-5 gap-y-1 font-mono tracking-wide ${className}`}>
+      <span className="break-all">
         {hasPrefix && <span className="text-gray-200">0x</span>}
         {renderGroups(0, splitAt)}
       </span>
-      <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        {renderGroups(splitAt, groups.length)}
-      </span>
+      <span className="break-all">{renderGroups(splitAt, groups.length)}</span>
     </span>
   );
 }
