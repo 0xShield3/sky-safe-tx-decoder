@@ -69,6 +69,24 @@ and run it from disk — the verification code is yours, not re-served by a CDN 
 every visit. It still fetches transaction data from the Safe Transaction Service
 API, so an internet connection is required; only the app code is local.
 
+##### Verifying a release build
+
+Each tagged release attaches the offline `index.html`, its `.sha256`, and a
+keyless build-provenance attestation (Sigstore, via GitHub Actions). After
+downloading, you can verify the file before trusting it:
+
+```bash
+# Integrity (matches the published checksum)
+shasum -a 256 -c sky-safe-tx-decoder-<tag>.html.sha256
+
+# Provenance — confirms GitHub Actions built this exact file from this repo/commit
+gh attestation verify sky-safe-tx-decoder-<tag>.html --repo 0xShield3/sky-safe-tx-decoder
+```
+
+For the strongest assurance, reproduce the build yourself: check out the tag, run
+`pnpm --filter @shield3/sky-safe-ui build:offline`, and confirm the sha256
+matches the release.
+
 #### Address Config CSVs
 
 The web UI loads two **independent**, session-only CSV files by drag-and-drop.

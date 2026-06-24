@@ -8,9 +8,11 @@ on:
     tags:
       - 'v*'
 
-# Least privilege: only what's needed to create the release and upload assets.
+# Least privilege: release upload + keyless build-provenance attestation.
 permissions:
-  contents: write
+  contents: write # create the release and upload assets
+  id-token: write # keyless signing (Sigstore OIDC) for the attestation
+  attestations: write # record the build-provenance attestation
 
 env:
   # Don't prompt when corepack provisions the pinned pnpm.
@@ -51,6 +53,14 @@ jobs:
           cp packages/ui/dist-offline/index.html "$ASSET"
           sha256sum "$ASSET" > "$ASSET.sha256"
           echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      # Keyless provenance binding the exact file to this commit + workflow.
+      # Verify after download:
+      #   gh attestation verify <file> --repo 0xShield3/sky-safe-tx-decoder
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.ASSET }}
 
       - name: Create release and upload
         env:
