@@ -1,0 +1,3 @@
+# sky-safe-config: my-safes
+type,network,address,label,verification_date,status
+safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active

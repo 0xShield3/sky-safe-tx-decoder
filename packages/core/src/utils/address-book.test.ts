@@ -4,16 +4,14 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  classifyConfigCsv,
   loadAddressBookCsv,
   parseAddressBookCsv,
+  readConfigKind,
+  serializeAddressBookCsv,
   unloadAddressBook,
 } from './address-book.js';
-import {
-  clearAddressBookTags,
-  getAddressBookEntries,
-  getAddressTag,
-  getAddressTags,
-} from './address-tags.js';
+import { clearAddressBookTags, getAddressBookEntries, getAddressTag, getAddressTags } from './address-tags.js';
 import { loadNetworkContracts, clearNetworkContracts } from '../contracts/index.js';
 
 // Sky LockstakeEngine — a per-network built-in (loaded for ethereum).
@@ -33,15 +31,51 @@ beforeEach(() => {
 
 describe('parseAddressBookCsv', () => {
   it('parses a valid CSV', () => {
-    const { entries, skipped } = parseAddressBookCsv(VALID);
+    const { entries, safes, skipped } = parseAddressBookCsv(VALID);
     expect(entries).toHaveLength(3);
+    expect(safes).toHaveLength(0);
     expect(skipped).toHaveLength(0);
     expect(entries[0]).toMatchObject({
       label: 'Sky LockstakeEngine (staking)',
       verificationDate: '2026-05-01',
       status: 'active',
+      type: 'address',
     });
     expect(entries[2]!.status).toBe('inactive');
+  });
+
+  it('parses Safe shortcut rows from optional config columns', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+      'address,,0xdAC17F958D2ee523a2206206994597C13D831ec7,Vendor: Example Payments LLC,2026-04-15,active',
+    ].join('\n');
+    const { entries, safes, skipped } = parseAddressBookCsv(csv);
+    expect(entries).toHaveLength(2);
+    expect(safes).toHaveLength(1);
+    expect(skipped).toHaveLength(0);
+    expect(safes[0]).toMatchObject({
+      address: '0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d',
+      label: 'Treasury Safe',
+      network: 'ethereum',
+      status: 'active',
+      verificationDate: '2026-05-10',
+    });
+  });
+
+  it('skips Safe shortcut rows with missing or unsupported networks', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Missing Network,2026-05-10,active',
+      'safe,unknown,0xdAC17F958D2ee523a2206206994597C13D831ec7,Unknown Network,2026-04-15,active',
+      'address,,0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,USDC,2026-04-15,active',
+    ].join('\n');
+    const { entries, safes, skipped } = parseAddressBookCsv(csv);
+    expect(entries).toHaveLength(1);
+    expect(safes).toHaveLength(0);
+    expect(skipped).toHaveLength(2);
+    expect(skipped[0]!.reason).toMatch(/require a network/);
+    expect(skipped[1]!.reason).toMatch(/unsupported safe network/);
   });
 
   it('tolerates a UTF-8 BOM at the start of the file', () => {
@@ -79,9 +113,7 @@ describe('parseAddressBookCsv', () => {
   });
 
   it('throws on missing required columns', () => {
-    expect(() => parseAddressBookCsv('address,label\n0x...,foo')).toThrow(
-      /missing required column/
-    );
+    expect(() => parseAddressBookCsv('address,label\n0x...,foo')).toThrow(/missing required column/);
   });
 
   it('throws on empty input', () => {
@@ -117,6 +149,119 @@ describe('parseAddressBookCsv', () => {
     expect(entries[0]!.label).toBe('Second');
     expect(skipped).toHaveLength(1);
     expect(skipped[0]!.reason).toMatch(/duplicate/);
+  });
+});
+
+describe('serializeAddressBookCsv', () => {
+  it('round-trips entries and safes through parse', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+      'safe,base,0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,Ops Safe,2026-05-09,inactive',
+      'address,,0xdAC17F958D2ee523a2206206994597C13D831ec7,Vendor: Example Payments LLC,2026-04-15,active',
+      'address,,0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,Sky LockstakeEngine,2026-05-01,active',
+    ].join('\n');
+    const original = parseAddressBookCsv(csv);
+    const reparsed = parseAddressBookCsv(serializeAddressBookCsv(original));
+    expect(reparsed.entries).toEqual(original.entries);
+    expect(reparsed.safes).toEqual(original.safes);
+    expect(reparsed.skipped).toHaveLength(0);
+  });
+
+  it('preserves one address used as a Safe on multiple networks', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury (eth),2026-05-10,active',
+      'safe,base,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury (base),2026-05-10,active',
+    ].join('\n');
+    const original = parseAddressBookCsv(csv);
+    expect(original.safes).toHaveLength(2);
+    const reparsed = parseAddressBookCsv(serializeAddressBookCsv(original));
+    expect(reparsed.safes).toHaveLength(2);
+    expect(reparsed.safes).toEqual(original.safes);
+  });
+
+  it('escapes labels containing commas and quotes', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'address,,0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,"Vendor, ""Quoted"" LLC",2026-05-01,active',
+    ].join('\n');
+    const original = parseAddressBookCsv(csv);
+    const serialized = serializeAddressBookCsv(original);
+    expect(serialized).toContain('"Vendor, ""Quoted"" LLC"');
+    expect(parseAddressBookCsv(serialized).entries[0]!.label).toBe('Vendor, "Quoted" LLC');
+  });
+
+  it('does not double-emit safe-typed entries as plain address rows', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+    ].join('\n');
+    const original = parseAddressBookCsv(csv);
+    const serialized = serializeAddressBookCsv(original);
+    const dataLines = serialized.trim().split('\n').slice(1);
+    expect(dataLines).toHaveLength(1);
+    expect(dataLines[0]!.startsWith('safe,')).toBe(true);
+  });
+
+  it('writes a kind marker that parses back cleanly', () => {
+    const csv = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+    ].join('\n');
+    const original = parseAddressBookCsv(csv);
+    const serialized = serializeAddressBookCsv(original, { kind: 'my-safes' });
+    expect(serialized.startsWith('# sky-safe-config: my-safes')).toBe(true);
+    expect(readConfigKind(serialized)).toBe('my-safes');
+    const reparsed = parseAddressBookCsv(serialized);
+    expect(reparsed.safes).toEqual(original.safes);
+    expect(reparsed.skipped).toHaveLength(0);
+  });
+});
+
+describe('config-kind markers and classification', () => {
+  const SAFES = [
+    'type,network,address,label,verification_date,status',
+    'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+  ].join('\n');
+  const ADDRESSES = [
+    'type,network,address,label,verification_date,status',
+    'address,,0xdAC17F958D2ee523a2206206994597C13D831ec7,Vendor,2026-04-15,active',
+  ].join('\n');
+
+  it('parser skips leading comment lines (including the marker)', () => {
+    const { entries, safes } = parseAddressBookCsv(`# sky-safe-config: my-safes\n${SAFES}`);
+    expect(safes).toHaveLength(1);
+    expect(entries).toHaveLength(1);
+  });
+
+  it('readConfigKind returns the marker, or null when absent', () => {
+    expect(readConfigKind(`# sky-safe-config: address-book\n${ADDRESSES}`)).toBe('address-book');
+    expect(readConfigKind(`# sky-safe-config: my-safes\n${SAFES}`)).toBe('my-safes');
+    expect(readConfigKind(ADDRESSES)).toBeNull();
+    expect(readConfigKind('# something else\n' + ADDRESSES)).toBeNull();
+  });
+
+  it('classifyConfigCsv prefers the marker over inferred content', () => {
+    // Marker says my-safes even though content is addresses — marker wins.
+    const c = classifyConfigCsv(`# sky-safe-config: my-safes\n${ADDRESSES}`);
+    expect(c.kind).toBe('my-safes');
+    expect(c.marker).toBe('my-safes');
+  });
+
+  it('classifyConfigCsv infers kind from content when no marker', () => {
+    expect(classifyConfigCsv(ADDRESSES)).toMatchObject({ kind: 'address-book', marker: null });
+    expect(classifyConfigCsv(SAFES)).toMatchObject({ kind: 'my-safes', marker: null });
+  });
+
+  it('classifyConfigCsv flags mixed and empty files', () => {
+    const mixed = [
+      'type,network,address,label,verification_date,status',
+      'safe,ethereum,0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d,Treasury Safe,2026-05-10,active',
+      'address,,0xdAC17F958D2ee523a2206206994597C13D831ec7,Vendor,2026-04-15,active',
+    ].join('\n');
+    expect(classifyConfigCsv(mixed).kind).toBe('mixed');
+    expect(classifyConfigCsv('type,network,address,label,verification_date,status').kind).toBe('empty');
   });
 });
 

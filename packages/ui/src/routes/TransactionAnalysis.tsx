@@ -37,10 +37,10 @@ export default function TransactionAnalysis() {
   // no manual loadNetworkContracts call, no chainId derivation.
   const { network, safeAddress, chainId } = useSafeRoute();
   const address = safeAddress;
-  // Subscribe to the address book — we don't render its state directly here,
-  // but the security analysis needs to re-run whenever the book changes
-  // (load / clear), so we depend on `state` below.
-  const { state: addressBookState } = useAddressBook();
+  // Subscribe to the config — we don't render it directly here, but the
+  // security analysis (which reads address tags) must re-run whenever either
+  // file changes, so we depend on both slots below.
+  const { addressBook, mySafes } = useAddressBook();
   const [searchParams] = useSearchParams();
   const safeTxHashParam = searchParams.get('safeTxHash');
 
@@ -78,18 +78,15 @@ export default function TransactionAnalysis() {
         });
 
         // Fetch all transactions with this nonce
-        const transactions = await client.fetchTransactionsByNonce(
-          address as `0x${string}`,
-          parseInt(nonce)
-        );
+        const transactions = await client.fetchTransactionsByNonce(address as `0x${string}`, parseInt(nonce));
 
         // Store all transactions
         setAllTransactions(transactions);
 
         // Select transaction: use safeTxHash param if provided (when switching via dropdown), otherwise use first
-        let tx: typeof transactions[0];
+        let tx: (typeof transactions)[0];
         if (safeTxHashParam) {
-          const found = transactions.find(t => t.safeTxHash === safeTxHashParam);
+          const found = transactions.find((t) => t.safeTxHash === safeTxHashParam);
           tx = found || transactions[0]!;
         } else {
           tx = transactions[0]!;
@@ -144,7 +141,7 @@ export default function TransactionAnalysis() {
               // Get Safe API decoded nested transactions from valueDecoded
               let apiNestedTxs: SafeApiNestedTransaction[] | null = null;
               if (tx.dataDecoded?.parameters) {
-                const transactionsParam = tx.dataDecoded.parameters.find(p => p.name === 'transactions');
+                const transactionsParam = tx.dataDecoded.parameters.find((p) => p.name === 'transactions');
                 if (transactionsParam?.valueDecoded && Array.isArray(transactionsParam.valueDecoded)) {
                   apiNestedTxs = transactionsParam.valueDecoded as SafeApiNestedTransaction[];
                 }
@@ -152,11 +149,7 @@ export default function TransactionAnalysis() {
 
               // Try to decode each nested transaction with custom decoders + preserve Safe API data
               const decoded = nestedTxs.map((nestedTx, index) => {
-                const customDecoded = decoderRegistry.decode(
-                  nestedTx.to as `0x${string}`,
-                  nestedTx.data,
-                  network
-                );
+                const customDecoded = decoderRegistry.decode(nestedTx.to as `0x${string}`, nestedTx.data, network);
 
                 if (customDecoded) {
                   extracted.push(...extractAddressesFromDecodedTransaction(customDecoded));
@@ -166,9 +159,7 @@ export default function TransactionAnalysis() {
                 const apiDecoded = apiNestedTxs?.[index]?.dataDecoded || null;
 
                 // Verify Safe API decoded data against raw data
-                const verification = apiDecoded
-                  ? verifyDecodedData(nestedTx.data, apiDecoded)
-                  : undefined;
+                const verification = apiDecoded ? verifyDecodedData(nestedTx.data, apiDecoded) : undefined;
 
                 return { tx: nestedTx, decoded: customDecoded, apiDecoded, verification };
               });
@@ -200,7 +191,8 @@ export default function TransactionAnalysis() {
         if (err instanceof Error) {
           // Check for rate limiting (429 status)
           if (err.message.includes('429') || err.message.toLowerCase().includes('rate limit')) {
-            errorMessage = 'Rate limited by Safe API. Please try again in a moment. Safe rate limits the public API for security.';
+            errorMessage =
+              'Rate limited by Safe API. Please try again in a moment. Safe rate limits the public API for security.';
           } else {
             errorMessage = err.message;
           }
@@ -242,7 +234,7 @@ export default function TransactionAnalysis() {
       }
     );
     setSecurity(analysis);
-  }, [transaction, paramAddresses, addressBookState, address]);
+  }, [transaction, paramAddresses, addressBook, mySafes, address]);
 
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
@@ -290,11 +282,14 @@ export default function TransactionAnalysis() {
           <h2 className="text-2xl font-bold">Transaction Analysis</h2>
         </div>
         <div className="text-sm text-gray-600 space-y-1">
-          <p>Safe: <Address address={address} /></p>
-          <p>Network: {network} | Nonce: {nonce} | Safe Version: {version}</p>
+          <p>
+            Safe: <Address address={address} />
+          </p>
+          <p>
+            Network: {network} | Nonce: {nonce} | Safe Version: {version}
+          </p>
         </div>
       </div>
-
 
       {/* Transaction Selector (if multiple exist) */}
       {allTransactions.length > 1 && (
@@ -302,9 +297,7 @@ export default function TransactionAnalysis() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-800 font-semibold mb-1">Multiple Transactions with Nonce {nonce}</p>
-              <p className="text-sm text-blue-700">
-                Select which transaction to analyze:
-              </p>
+              <p className="text-sm text-blue-700">Select which transaction to analyze:</p>
             </div>
             <select
               value={transaction.safeTxHash}
@@ -313,7 +306,9 @@ export default function TransactionAnalysis() {
             >
               {allTransactions.map((tx, idx) => {
                 const status = tx.isExecuted
-                  ? (tx.isSuccessful ? '✅ Executed' : '❌ Failed')
+                  ? tx.isSuccessful
+                    ? '✅ Executed'
+                    : '❌ Failed'
                   : `⏳ Pending (${tx.confirmations?.length || 0}/${tx.confirmationsRequired})`;
                 const date = tx.submissionDate ? new Date(tx.submissionDate).toLocaleString() : 'Unknown';
                 return (
@@ -329,24 +324,34 @@ export default function TransactionAnalysis() {
 
       {/* STEP 1: Security Warnings - MOST IMPORTANT */}
       {hasRisks && (
-        <div className={`border-2 rounded-lg p-6 ${
-          security.overallRisk === 'critical' ? 'border-red-600 bg-red-50' :
-          security.overallRisk === 'high' ? 'border-orange-600 bg-orange-50' :
-          security.overallRisk === 'medium' ? 'border-yellow-600 bg-yellow-50' :
-          'border-blue-500 bg-blue-50'
-        }`}>
+        <div
+          className={`border-2 rounded-lg p-6 ${
+            security.overallRisk === 'critical'
+              ? 'border-red-600 bg-red-50'
+              : security.overallRisk === 'high'
+                ? 'border-orange-600 bg-orange-50'
+                : security.overallRisk === 'medium'
+                  ? 'border-yellow-600 bg-yellow-50'
+                  : 'border-blue-500 bg-blue-50'
+          }`}
+        >
           <div className="flex items-start gap-3 mb-4">
             <div className="text-3xl">⚠️</div>
             <div className="flex-1">
               <h3 className="text-xl font-bold mb-1">Security Warnings</h3>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Risk Level:</span>
-                <span className={`px-3 py-1 rounded-full font-bold uppercase text-sm ${
-                  security.overallRisk === 'critical' ? 'bg-red-600 text-white' :
-                  security.overallRisk === 'high' ? 'bg-orange-600 text-white' :
-                  security.overallRisk === 'medium' ? 'bg-yellow-600 text-white' :
-                  'bg-blue-500 text-white'
-                }`}>
+                <span
+                  className={`px-3 py-1 rounded-full font-bold uppercase text-sm ${
+                    security.overallRisk === 'critical'
+                      ? 'bg-red-600 text-white'
+                      : security.overallRisk === 'high'
+                        ? 'bg-orange-600 text-white'
+                        : security.overallRisk === 'medium'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-blue-500 text-white'
+                  }`}
+                >
                   {security.overallRisk}
                 </span>
               </div>
@@ -401,14 +406,12 @@ export default function TransactionAnalysis() {
                       •{' '}
                       {r.status === 'inactive' ? (
                         <>
-                          <strong>INACTIVE</strong> address ({r.label}) —{' '}
-                          <Address address={r.address} />
+                          <strong>INACTIVE</strong> address ({r.label}) — <Address address={r.address} />
                           {r.isNested && ' (nested in MultiSend)'}
                         </>
                       ) : (
                         <>
-                          Unknown address —{' '}
-                          <Address address={r.address} />
+                          Unknown address — <Address address={r.address} />
                           {r.isNested && ' (nested in MultiSend)'}
                         </>
                       )}
@@ -427,17 +430,13 @@ export default function TransactionAnalysis() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold">Transaction Data</h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Review what this transaction does before signing
-              </p>
+              <p className="text-sm text-gray-600 mt-1">Review what this transaction does before signing</p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setViewMode('decoded')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === 'decoded'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                  viewMode === 'decoded' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Decoded
@@ -445,9 +444,7 @@ export default function TransactionAnalysis() {
               <button
                 onClick={() => setViewMode('raw')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === 'raw'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                  viewMode === 'raw' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Raw
@@ -501,7 +498,9 @@ export default function TransactionAnalysis() {
                       <p className="font-semibold text-yellow-900 mb-2">⚠️ Function-Specific Warnings:</p>
                       <ul className="text-sm space-y-1">
                         {customDecoded.main.warnings.map((warning, i) => (
-                          <li key={i} className="text-yellow-800">• {warning}</li>
+                          <li key={i} className="text-yellow-800">
+                            • {warning}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -552,13 +551,15 @@ export default function TransactionAnalysis() {
               {/* MultiSend Batched Transactions */}
               {multiSendTxs && multiSendTxs.length > 0 && (
                 <div className="space-y-4">
-                  <div className={`rounded-lg p-4 border ${
-                    multiSendVerification?.verified
-                      ? 'bg-indigo-50 border-indigo-200'
-                      : multiSendVerification?.verified === false
-                      ? 'bg-red-50 border-red-400'
-                      : 'bg-indigo-50 border-indigo-200'
-                  }`}>
+                  <div
+                    className={`rounded-lg p-4 border ${
+                      multiSendVerification?.verified
+                        ? 'bg-indigo-50 border-indigo-200'
+                        : multiSendVerification?.verified === false
+                          ? 'bg-red-50 border-red-400'
+                          : 'bg-indigo-50 border-indigo-200'
+                    }`}
+                  >
                     <div className="flex items-center gap-2">
                       <span className="text-lg">📦</span>
                       <div className="flex-1">
@@ -572,9 +573,7 @@ export default function TransactionAnalysis() {
                         </div>
                         <p className="text-sm text-indigo-700">{multiSendTxs.length} transactions in this batch</p>
                         {!multiSendVerification?.verified && multiSendVerification?.error && (
-                          <p className="text-xs text-red-700 mt-2">
-                            ⚠️ Warning: {multiSendVerification.error}
-                          </p>
+                          <p className="text-xs text-red-700 mt-2">⚠️ Warning: {multiSendVerification.error}</p>
                         )}
                       </div>
                     </div>
@@ -634,7 +633,9 @@ export default function TransactionAnalysis() {
                           {item.decoded.main.warnings && item.decoded.main.warnings.length > 0 && (
                             <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
                               {item.decoded.main.warnings.map((warning, i) => (
-                                <p key={i} className="text-xs text-yellow-800">⚠️ {warning}</p>
+                                <p key={i} className="text-xs text-yellow-800">
+                                  ⚠️ {warning}
+                                </p>
                               ))}
                             </div>
                           )}
@@ -644,11 +645,11 @@ export default function TransactionAnalysis() {
                       {/* Safe API decoded data (when no custom decoder) */}
                       {!item.decoded && item.apiDecoded && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
-                          <div className={`rounded p-3 border mb-3 ${
-                            item.verification?.verified
-                              ? 'bg-blue-50 border-blue-200'
-                              : 'bg-red-50 border-red-400'
-                          }`}>
+                          <div
+                            className={`rounded p-3 border mb-3 ${
+                              item.verification?.verified ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-400'
+                            }`}
+                          >
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-semibold text-blue-900">Method: {item.apiDecoded.method}</p>
                               {item.verification && !item.verification.verified && (
@@ -658,9 +659,7 @@ export default function TransactionAnalysis() {
                               )}
                             </div>
                             {!item.verification?.verified && item.verification?.error && (
-                              <p className="text-xs text-red-700 mt-2">
-                                ⚠️ Warning: {item.verification.error}
-                              </p>
+                              <p className="text-xs text-red-700 mt-2">⚠️ Warning: {item.verification.error}</p>
                             )}
                           </div>
                           {item.apiDecoded.parameters.length > 0 && (
@@ -687,13 +686,15 @@ export default function TransactionAnalysis() {
               {/* Safe API Decoded Data (if no custom decoder) */}
               {!hasCustomDecoding && transaction.dataDecoded && (
                 <div className="space-y-4">
-                  <div className={`rounded-lg p-4 border ${
-                    apiDecodedVerification?.verified
-                      ? 'bg-blue-50 border-blue-200'
-                      : apiDecodedVerification?.verified === false
-                      ? 'bg-red-50 border-red-400'
-                      : 'bg-blue-50 border-blue-200'
-                  }`}>
+                  <div
+                    className={`rounded-lg p-4 border ${
+                      apiDecodedVerification?.verified
+                        ? 'bg-blue-50 border-blue-200'
+                        : apiDecodedVerification?.verified === false
+                          ? 'bg-red-50 border-red-400'
+                          : 'bg-blue-50 border-blue-200'
+                    }`}
+                  >
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-blue-900">Method: {transaction.dataDecoded.method}</p>
                       {apiDecodedVerification && !apiDecodedVerification.verified && (
@@ -703,9 +704,7 @@ export default function TransactionAnalysis() {
                       )}
                     </div>
                     {!apiDecodedVerification?.verified && apiDecodedVerification?.error && (
-                      <p className="text-xs text-red-700 mt-2">
-                        ⚠️ Warning: {apiDecodedVerification.error}
-                      </p>
+                      <p className="text-xs text-red-700 mt-2">⚠️ Warning: {apiDecodedVerification.error}</p>
                     )}
                   </div>
 
@@ -799,18 +798,24 @@ export default function TransactionAnalysis() {
       <div className="bg-gray-50 rounded-lg p-4 border">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Status:</span>
-          <span className={`font-semibold ${
-            transaction.isExecuted
-              ? (transaction.isSuccessful ? 'text-green-600' : 'text-red-600')
-              : 'text-yellow-600'
-          }`}>
+          <span
+            className={`font-semibold ${
+              transaction.isExecuted
+                ? transaction.isSuccessful
+                  ? 'text-green-600'
+                  : 'text-red-600'
+                : 'text-yellow-600'
+            }`}
+          >
             {transaction.isExecuted ? (transaction.isSuccessful ? '✅ Executed' : '❌ Failed') : '⏳ Pending'}
           </span>
         </div>
         {!transaction.isExecuted && (
           <div className="flex items-center justify-between text-sm mt-2">
             <span className="text-gray-600">Confirmations:</span>
-            <span>{transaction.confirmations.length} / {transaction.confirmationsRequired}</span>
+            <span>
+              {transaction.confirmations.length} / {transaction.confirmationsRequired}
+            </span>
           </div>
         )}
       </div>
@@ -829,8 +834,8 @@ export default function TransactionAnalysis() {
             <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
               <p className="font-semibold text-yellow-900 mb-2">⚠️ Critical Step</p>
               <p className="text-sm text-yellow-900">
-                Your device may show one or more of these hashes. Verify they match.
-                If any hash doesn't match, DO NOT SIGN!
+                Your device may show one or more of these hashes. Verify they match. If any hash doesn't match, DO NOT
+                SIGN!
               </p>
             </div>
 
@@ -838,21 +843,15 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Domain Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">
-                    {hashes.domainHash}
-                  </p>
+                  <p className="font-mono text-green-400 text-xs break-all">{hashes.domainHash}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Unique per Safe. EIP-712 domain separator.
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Unique per Safe. EIP-712 domain separator.</p>
               </div>
 
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Message Hash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">
-                    {hashes.messageHash}
-                  </p>
+                  <p className="font-mono text-green-400 text-xs break-all">{hashes.messageHash}</p>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Unique per transaction. Often shown on Ledger Nano S and similar smaller devices.
@@ -862,13 +861,9 @@ export default function TransactionAnalysis() {
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">safeTxHash:</p>
                 <div className="bg-gray-900 p-3 rounded-lg">
-                  <p className="font-mono text-green-400 text-xs break-all">
-                    {hashes.safeTxHash}
-                  </p>
+                  <p className="font-mono text-green-400 text-xs break-all">{hashes.safeTxHash}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Unique per transaction per Safe. Shown on some devices.
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Unique per transaction per Safe. Shown on some devices.</p>
               </div>
             </div>
 
@@ -876,8 +871,8 @@ export default function TransactionAnalysis() {
               <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4">
                 <p className="font-semibold text-red-900 mb-2">⚠️ HASH MISMATCH WARNING</p>
                 <p className="text-sm text-red-900">
-                  Our calculated Safe Transaction Hash does not match what the Safe API provided.
-                  This could indicate the API is compromised or returning incorrect data. DO NOT SIGN!
+                  Our calculated Safe Transaction Hash does not match what the Safe API provided. This could indicate
+                  the API is compromised or returning incorrect data. DO NOT SIGN!
                 </p>
               </div>
             )}
