@@ -1,17 +1,31 @@
 /**
  * Settings page — manage the in-session config.
  *
- *   - My Safes (personal): editable (remove) + exportable. Capture adds here.
+ *   - My Safes (personal): add / edit label / remove, and export. Adding here or
+ *     via the capture banner only updates the session; export to save to CSV.
  *   - Address book (managed): read-only; replace by loading a fresh file.
  *
  * Config is session-only (no localStorage); the CSV files you keep externally
  * are the source of truth. Drag them onto the bar above to load each session.
  */
 
+import { useState } from 'react';
 import { useAddressBook } from '../address-book/AddressBookContext';
-import { EntryTable, SafeTable } from '../address-book/tables';
+import { EntryTable } from '../address-book/tables';
 import { downloadCsv } from '../address-book/download';
-import type { AddressBookSkippedRow } from '@shield3/sky-safe-core';
+import type { AddressBookSafe, AddressBookSkippedRow } from '@shield3/sky-safe-core';
+
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+const NETWORK_OPTIONS = [
+  { value: 'ethereum', label: 'Ethereum Mainnet' },
+  { value: 'base', label: 'Base' },
+  { value: 'sepolia', label: 'Sepolia Testnet' },
+];
+
+function safeKey(network: string, address: string): string {
+  return `${network}:${address.toLowerCase()}`;
+}
 
 function SkippedRows({ skipped }: { skipped: AddressBookSkippedRow[] }) {
   if (skipped.length === 0) return null;
@@ -42,8 +56,174 @@ function SkippedRows({ skipped }: { skipped: AddressBookSkippedRow[] }) {
   );
 }
 
+function AddSafeForm() {
+  const { addSafe } = useAddressBook();
+  const [network, setNetwork] = useState('ethereum');
+  const [address, setAddress] = useState('');
+  const [label, setLabel] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const addr = address.trim();
+    const lbl = label.trim();
+    if (!ADDRESS_PATTERN.test(addr)) {
+      setError('Enter a valid address (0x followed by 40 hex characters).');
+      return;
+    }
+    if (!lbl) {
+      setError('Enter a label.');
+      return;
+    }
+    addSafe({ address: addr as `0x${string}`, label: lbl, network, status: 'active', verificationDate: '' });
+    setAddress('');
+    setLabel('');
+    setError(null);
+  };
+
+  return (
+    <form onSubmit={handleAdd} className="rounded-lg border border-gray-200 bg-gray-50 p-3 mb-3">
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs text-gray-600">
+          Network
+          <select
+            value={network}
+            onChange={(e) => setNetwork(e.target.value)}
+            className="block mt-1 px-2 py-1 border border-gray-300 rounded text-sm bg-white"
+          >
+            {NETWORK_OPTIONS.map((n) => (
+              <option key={n.value} value={n.value}>
+                {n.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-gray-600 flex-1 min-w-[20rem]">
+          Safe address
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="0x…"
+            className="block mt-1 w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+          />
+        </label>
+        <label className="text-xs text-gray-600 flex-1 min-w-[12rem]">
+          Label
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="e.g. Treasury Safe"
+            className="block mt-1 w-full px-2 py-1 border border-gray-300 rounded text-sm"
+          />
+        </label>
+        <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+          Add Safe
+        </button>
+      </div>
+      {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+    </form>
+  );
+}
+
+function MySafesTable({ safes }: { safes: AddressBookSafe[] }) {
+  const { removeSafe, renameSafe } = useAddressBook();
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+
+  if (safes.length === 0) {
+    return <p className="text-sm text-gray-500">No Safes yet. Add one above, or open a Safe and use the banner.</p>;
+  }
+
+  const startEdit = (s: AddressBookSafe) => {
+    setEditingKey(safeKey(s.network, s.address));
+    setDraft(s.label);
+  };
+  const saveEdit = (s: AddressBookSafe) => {
+    const t = draft.trim();
+    if (t) renameSafe(s.network, s.address, t);
+    setEditingKey(null);
+  };
+
+  return (
+    <div className="border rounded overflow-hidden">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left bg-gray-50 border-b">
+            <th className="px-3 py-2 w-28">Network</th>
+            <th className="px-3 py-2">Address</th>
+            <th className="px-3 py-2">Name</th>
+            <th className="px-3 py-2 w-20">Status</th>
+            <th className="px-3 py-2 w-36" />
+          </tr>
+        </thead>
+        <tbody>
+          {safes.map((s) => {
+            const key = safeKey(s.network, s.address);
+            const editing = editingKey === key;
+            return (
+              <tr key={key} className="border-b last:border-0 hover:bg-gray-50">
+                <td className="px-3 py-2 font-mono">{s.network}</td>
+                <td className="px-3 py-2 font-mono break-all">{s.address}</td>
+                <td className="px-3 py-2">
+                  {editing ? (
+                    <input
+                      type="text"
+                      value={draft}
+                      autoFocus
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(s);
+                        if (e.key === 'Escape') setEditingKey(null);
+                      }}
+                      className="w-full px-1 py-0.5 border border-gray-300 rounded text-xs"
+                    />
+                  ) : (
+                    s.label
+                  )}
+                </td>
+                <td className="px-3 py-2">{s.status}</td>
+                <td className="px-3 py-2">
+                  {editing ? (
+                    <span className="flex gap-2">
+                      <button type="button" onClick={() => saveEdit(s)} className="text-blue-600 hover:underline">
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingKey(null)}
+                        className="text-gray-500 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="flex gap-2">
+                      <button type="button" onClick={() => startEdit(s)} className="text-blue-600 hover:underline">
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeSafe(s.network, s.address)}
+                        className="text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function Settings() {
-  const { addressBook, mySafes, removeSafe, exportMySafes } = useAddressBook();
+  const { addressBook, mySafes, exportMySafes } = useAddressBook();
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -55,7 +235,7 @@ export default function Settings() {
         </p>
       </div>
 
-      {/* My Safes — editable + exportable */}
+      {/* My Safes — add / edit / remove + export */}
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
@@ -72,17 +252,10 @@ export default function Settings() {
             </button>
           )}
         </div>
-        {mySafes ? (
-          <>
-            <SafeTable safes={mySafes.safes} onRemove={(safe) => removeSafe(safe.network, safe.address)} />
-            <SkippedRows skipped={mySafes.skipped} />
-          </>
-        ) : (
-          <p className="text-sm text-gray-500">
-            No My Safes file loaded. Open a Safe and use the capture banner to add one, or drag a My Safes CSV onto the
-            bar above.
-          </p>
-        )}
+
+        <AddSafeForm />
+        <MySafesTable safes={mySafes?.safes ?? []} />
+        {mySafes && <SkippedRows skipped={mySafes.skipped} />}
       </section>
 
       {/* Address book — managed, read-only */}

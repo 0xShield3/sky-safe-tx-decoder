@@ -130,8 +130,8 @@ reject a file dropped on the wrong slot:
 
 ```csv
 # sky-safe-config: address-book
-type,network,address,label,verification_date,status
-address,,0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,Sky LockstakeEngine,2026-05-01,active
+address,label,verification_date,status
+0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3,Sky LockstakeEngine,2026-05-01,active
 ```
 
 ```csv
@@ -151,15 +151,17 @@ with or drift stale, so each session you re-load fresh files.
 
 ##### Managing My Safes
 
-- **Settings page** (top-right link): review both files, remove individual
-  Safes, and export My Safes back to CSV.
-- **Export** (config bar or Settings): writes My Safes as a CSV that re-imports
-  exactly (round-trip), with the kind marker.
+- **Settings page** (top-right link): add a Safe (network + address + label),
+  edit a Safe's label, remove Safes, and export My Safes back to CSV.
 - **Capture an unsaved Safe**: when you open a Safe that isn't in My Safes, a
-  banner offers to label it, add it to the session, and re-export My Safes so
-  you can save it back to your file. Because the address book and My Safes are
-  separate files, you can update the managed address book anytime without losing
-  your Safes.
+  banner offers to label it and add it to the session list. Adding does **not**
+  download anything — you export once, when you're ready, from Settings (or the
+  config bar).
+- **Export** (config bar or Settings): writes My Safes as a CSV that re-imports
+  exactly (round-trip), with the kind marker. Remember to export to persist your
+  in-session changes.
+- Because the address book and My Safes are separate files, you can update the
+  managed address book anytime without losing your Safes.
 
 ### From Source
 

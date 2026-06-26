@@ -54,6 +54,8 @@ interface AddressBookContextValue {
   addSafe: (safe: AddressBookSafe) => void;
   /** Remove a Safe shortcut by network + address. */
   removeSafe: (network: string, address: string) => void;
+  /** Change a Safe shortcut's label, found by network + address. */
+  renameSafe: (network: string, address: string, label: string) => void;
   /** Serialize My Safes back to CSV (with kind marker). */
   exportMySafes: () => string;
 }
@@ -143,6 +145,17 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const renameSafe = useCallback((network: string, address: string, label: string) => {
+    setMySafes((prev) => {
+      if (!prev) return prev;
+      const key = lc(address);
+      return {
+        ...prev,
+        safes: prev.safes.map((s) => (s.network === network && lc(s.address) === key ? { ...s, label } : s)),
+      };
+    });
+  }, []);
+
   const value = useMemo<AddressBookContextValue>(
     () => ({
       addressBook,
@@ -153,9 +166,20 @@ export function AddressBookProvider({ children }: { children: ReactNode }) {
       clearMySafes,
       addSafe,
       removeSafe,
+      renameSafe,
       exportMySafes: () => serializeAddressBookCsv({ entries: [], safes: mySafes?.safes ?? [] }, { kind: 'my-safes' }),
     }),
-    [addressBook, mySafes, loadAddressBook, loadMySafes, clearAddressBook, clearMySafes, addSafe, removeSafe]
+    [
+      addressBook,
+      mySafes,
+      loadAddressBook,
+      loadMySafes,
+      clearAddressBook,
+      clearMySafes,
+      addSafe,
+      removeSafe,
+      renameSafe,
+    ]
   );
 
   return <AddressBookContext.Provider value={value}>{children}</AddressBookContext.Provider>;
