@@ -1,7 +1,9 @@
 /**
  * Global banner shown when the Safe currently being viewed is not in the
- * signer's My Safes list. Lets them label it, add it to the in-session list,
- * and re-export My Safes (the external source of truth they keep).
+ * signer's My Safes list. Lets them label it and add it to the in-session list.
+ * It does NOT export — adding shouldn't trigger a download every time; the
+ * signer exports once from Settings (or the config bar) when they're ready to
+ * persist to their CSV.
  *
  * Mounted once in App.tsx, just under the address-config bar. Reads the active
  * Safe from the router via useMatch, so it works on any /safe/... page.
@@ -11,9 +13,8 @@
 
 import { useState } from 'react';
 import { useMatch } from 'react-router-dom';
-import { isNetworkSupported, serializeAddressBookCsv, type AddressBookSafe } from '@shield3/sky-safe-core';
+import { isNetworkSupported, type AddressBookSafe } from '@shield3/sky-safe-core';
 import { useAddressBook } from './AddressBookContext';
-import { downloadCsv } from './download';
 
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
@@ -45,7 +46,7 @@ export function UnsavedSafePrompt() {
 
   const trimmedLabel = label.trim();
 
-  const handleAddAndExport = () => {
+  const handleAdd = () => {
     if (!trimmedLabel) return;
     const safe: AddressBookSafe = {
       address: address as `0x${string}`,
@@ -55,18 +56,6 @@ export function UnsavedSafePrompt() {
       network,
     };
     addSafe(safe);
-
-    // Build the export from current My Safes + this Safe directly: addSafe's
-    // state update is async, so reading it back here would miss the new entry.
-    const lcAddr = address.toLowerCase();
-    const safes = [
-      ...(mySafes?.safes ?? []).filter((s) => !(s.network === network && s.address.toLowerCase() === lcAddr)),
-      safe,
-    ];
-    downloadCsv(
-      mySafes?.filename ?? 'my-safes.csv',
-      serializeAddressBookCsv({ entries: [], safes }, { kind: 'my-safes' })
-    );
     setLabel('');
   };
 
@@ -77,7 +66,9 @@ export function UnsavedSafePrompt() {
           <div className="min-w-0">
             <span className="font-semibold">This Safe isn't in My Safes.</span>{' '}
             <span className="font-mono">{network}</span> <span className="font-mono break-all">{address}</span>
-            <span className="block text-xs text-amber-800">Add it and re-export to save it to your My Safes CSV.</span>
+            <span className="block text-xs text-amber-800">
+              Add it to your session list. Export from Settings when you want to save it to your CSV.
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 ml-auto">
             <input
@@ -87,16 +78,16 @@ export function UnsavedSafePrompt() {
               placeholder="Label this Safe…"
               className="px-2 py-1 border border-amber-300 rounded text-sm bg-white focus:ring-2 focus:ring-amber-500"
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddAndExport();
+                if (e.key === 'Enter') handleAdd();
               }}
             />
             <button
               type="button"
-              onClick={handleAddAndExport}
+              onClick={handleAdd}
               disabled={!trimmedLabel}
               className="text-xs px-2 py-1 bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Add to My Safes &amp; export
+              Add to My Safes
             </button>
             <button
               type="button"

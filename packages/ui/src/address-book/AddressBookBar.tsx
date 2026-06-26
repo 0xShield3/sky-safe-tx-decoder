@@ -12,9 +12,26 @@ import { useAddressBook } from './AddressBookContext';
 import { AddressBookBrowser } from './AddressBookBrowser';
 import { downloadCsv } from './download';
 
-const HEADER = 'type,network,address,label,verification_date,status';
-const ADDRESS_BOOK_TEMPLATE = `# sky-safe-config: address-book\n${HEADER}\n`;
-const MY_SAFES_TEMPLATE = `# sky-safe-config: my-safes\n${HEADER}\n`;
+// Blank templates with `#` comment lines (the parser skips them) so the user
+// knows exactly what each column should be. The address book needs no type/
+// network columns — every row is a plain address label.
+const ADDRESS_BOOK_TEMPLATE = [
+  '# sky-safe-config: address-book',
+  '# Labels for known addresses — one row per address.',
+  '# status must be "active" or "inactive".',
+  'address,label,verification_date,status',
+  '',
+].join('\n');
+
+const MY_SAFES_TEMPLATE = [
+  '# sky-safe-config: my-safes',
+  '# Your Safe shortcuts (home-page dropdown) — one row per Safe.',
+  '# type is always "safe"; network is ethereum, base, or sepolia; status is active or inactive.',
+  '# Example row (delete the leading # and edit):',
+  '# safe,ethereum,0xYourSafeAddress________________________,My Treasury Safe,YYYY-MM-DD,active',
+  'type,network,address,label,verification_date,status',
+  '',
+].join('\n');
 
 function formatLoadedAt(d: Date): string {
   return d.toLocaleString(undefined, {
