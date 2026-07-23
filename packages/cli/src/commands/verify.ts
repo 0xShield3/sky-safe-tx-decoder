@@ -17,6 +17,8 @@ import {
   loadNetworkContracts,
   decoderRegistry,
   LockstakeEngineDecoder,
+  SPBEAMDecoder,
+  StUsdsRateSetterDecoder,
   calculateSafeTxHash,
   verifySafeTxHash,
   analyzeSecurity,
@@ -39,6 +41,8 @@ import {
 
 // Register custom decoders
 decoderRegistry.register(new LockstakeEngineDecoder());
+decoderRegistry.register(new SPBEAMDecoder());
+decoderRegistry.register(new StUsdsRateSetterDecoder());
 
 export function createVerifyCommand(): Command {
   const command = new Command('verify');
