@@ -6,6 +6,8 @@ import {
   analyzeSecurity,
   decoderRegistry,
   LockstakeEngineDecoder,
+  SPBEAMDecoder,
+  StUsdsRateSetterDecoder,
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
@@ -29,6 +31,8 @@ import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
 // Register custom decoders
 decoderRegistry.register(new LockstakeEngineDecoder());
+decoderRegistry.register(new SPBEAMDecoder());
+decoderRegistry.register(new StUsdsRateSetterDecoder());
 
 export default function TransactionAnalysis() {
   const navigate = useNavigate();
