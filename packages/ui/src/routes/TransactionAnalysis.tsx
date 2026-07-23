@@ -475,8 +475,8 @@ export default function TransactionAnalysis() {
             <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
               <p className="font-semibold text-amber-900 mb-2">Unable to decode this transaction</p>
               <p className="text-sm text-amber-900">
-                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Nothing is known
-                about what this call does. Verify the raw data below against an independent source before signing.
+                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Nothing is known about
+                what this call does. Verify the raw data below against an independent source before signing.
               </p>
               <p className="text-sm text-amber-900 mt-2">
                 Hash verification below is unaffected — it does not depend on decoding.
@@ -604,7 +604,9 @@ export default function TransactionAnalysis() {
                     className={`rounded-lg p-4 border ${
                       multiSendVerification?.status === 'mismatch'
                         ? 'bg-red-50 border-red-400'
-                        : 'bg-indigo-50 border-indigo-200'
+                        : multiSendVerification?.status === 'unverifiable'
+                          ? 'bg-amber-50 border-amber-400'
+                          : 'bg-indigo-50 border-indigo-200'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -618,8 +620,8 @@ export default function TransactionAnalysis() {
                             </span>
                           )}
                           {multiSendVerification?.status === 'unverifiable' && (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                              Not verified
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
+                              ⚠ Unchecked
                             </span>
                           )}
                         </div>
@@ -628,9 +630,9 @@ export default function TransactionAnalysis() {
                           <p className="text-xs text-red-700 mt-2">⚠️ Warning: {multiSendVerification.error}</p>
                         )}
                         {multiSendVerification?.status === 'unverifiable' && (
-                          <p className="text-xs text-gray-600 mt-2">
-                            Could not re-encode to check this decoding: {multiSendVerification.error}. This is not
-                            evidence of a mismatch — it means the check did not run.
+                          <p className="text-xs text-amber-800 mt-2">
+                            This decoding could not be checked against the raw data: {multiSendVerification.error}.
+                            Nothing shown here has been verified — read the Raw view before signing.
                           </p>
                         )}
                       </div>
@@ -689,6 +691,16 @@ export default function TransactionAnalysis() {
                               ))}
                             </div>
                           )}
+                          {item.decoded.generalWarnings && item.decoded.generalWarnings.length > 0 && (
+                            <div className="mt-2 bg-red-50 border-2 border-red-400 rounded p-2">
+                              <p className="text-xs font-semibold text-red-900 mb-1">⚠️ Decoder verification failed</p>
+                              {item.decoded.generalWarnings.map((warning, i) => (
+                                <p key={i} className="text-xs text-red-900 break-all">
+                                  {warning}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                           {item.decoded.main.warnings && item.decoded.main.warnings.length > 0 && (
                             <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
                               {item.decoded.main.warnings.map((warning, i) => (
@@ -708,7 +720,9 @@ export default function TransactionAnalysis() {
                             className={`rounded p-3 border mb-3 ${
                               item.verification?.status === 'mismatch'
                                 ? 'bg-red-50 border-red-400'
-                                : 'bg-blue-50 border-blue-200'
+                                : item.verification?.status === 'unverifiable'
+                                  ? 'bg-amber-50 border-amber-400'
+                                  : 'bg-blue-50 border-blue-200'
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
@@ -719,8 +733,8 @@ export default function TransactionAnalysis() {
                                 </span>
                               )}
                               {item.verification?.status === 'unverifiable' && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                                  Not verified
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
+                                  ⚠ Unchecked
                                 </span>
                               )}
                             </div>
@@ -728,9 +742,9 @@ export default function TransactionAnalysis() {
                               <p className="text-xs text-red-700 mt-2">⚠️ Warning: {item.verification.error}</p>
                             )}
                             {item.verification?.status === 'unverifiable' && (
-                              <p className="text-xs text-gray-600 mt-2">
-                                Could not re-encode to check this decoding: {item.verification.error}. This is not
-                                evidence of a mismatch — it means the check did not run.
+                              <p className="text-xs text-amber-800 mt-2">
+                                This decoding could not be checked against the raw data: {item.verification.error}.
+                                Nothing shown here has been verified — read the Raw view before signing.
                               </p>
                             )}
                           </div>
@@ -762,7 +776,9 @@ export default function TransactionAnalysis() {
                     className={`rounded-lg p-4 border ${
                       apiDecodedVerification?.status === 'mismatch'
                         ? 'bg-red-50 border-red-400'
-                        : 'bg-blue-50 border-blue-200'
+                        : apiDecodedVerification?.status === 'unverifiable'
+                          ? 'bg-amber-50 border-amber-400'
+                          : 'bg-blue-50 border-blue-200'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -773,8 +789,8 @@ export default function TransactionAnalysis() {
                         </span>
                       )}
                       {apiDecodedVerification?.status === 'unverifiable' && (
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                          Not verified
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-900">
+                          ⚠ Unchecked
                         </span>
                       )}
                     </div>
@@ -782,9 +798,9 @@ export default function TransactionAnalysis() {
                       <p className="text-xs text-red-700 mt-2">⚠️ Warning: {apiDecodedVerification.error}</p>
                     )}
                     {apiDecodedVerification?.status === 'unverifiable' && (
-                      <p className="text-xs text-gray-600 mt-2">
-                        Could not re-encode to check this decoding: {apiDecodedVerification.error}. This is not evidence
-                        of a mismatch — it means the check did not run.
+                      <p className="text-xs text-amber-800 mt-2">
+                        This decoding could not be checked against the raw data: {apiDecodedVerification.error}. Nothing
+                        shown here has been verified — read the Raw view before signing.
                       </p>
                     )}
                   </div>

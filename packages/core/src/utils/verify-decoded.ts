@@ -154,12 +154,40 @@ export function verifyDecodedData(
       };
     }
 
-    // Parse parameter types. The Safe API emits tuples as flattened canonical
-    // signatures — `(bytes32,uint256)[]` — which is already viem's
-    // human-readable ABI format, so this handles structs without special cases.
-    const abiParameters = parseAbiParameters(
-      parameters.map(p => `${p.type} ${p.name}`).join(', ')
-    );
+    // Parse each parameter's type INDEPENDENTLY, and never parse its name.
+    //
+    // Both fields come from the Safe API, which this tool treats as untrusted.
+    // Concatenating them into one string and parsing that let a hostile value
+    // inject additional parameters: a name of `amount, bool force` turns a
+    // two-parameter list into a three-parameter one. The extra parameter is
+    // encoded but never displayed, so calldata for a different function could
+    // re-encode exactly and earn a green "Verified" badge while the signer was
+    // shown a decoding missing a parameter.
+    //
+    // Parsing one type at a time and requiring exactly one parameter out of it
+    // makes that impossible: a parameter can describe itself, and nothing else.
+    // Names do not affect ABI encoding, so they are not parsed at all.
+    //
+    // The Safe API emits tuples as flattened canonical signatures —
+    // `(bytes32,uint256)[]` — which is already viem's human-readable ABI
+    // format, so legitimate structs still parse to a single parameter.
+    const abiParameters: AbiParameter[] = [];
+    for (const param of decoded.parameters) {
+      const parsed = parseAbiParameters(param.type);
+      if (parsed.length !== 1) {
+        return {
+          verified: false,
+          status: 'mismatch',
+          error:
+            `Parameter "${param.name}" declares the type "${param.type}", which expands to ` +
+            `${parsed.length} parameters rather than one. The decoded data does not faithfully ` +
+            `describe the raw data.`,
+        };
+      }
+      // Deliberately drop the API-supplied name — it is inert for encoding and
+      // must not reach the parser.
+      abiParameters.push(parsed[0]!);
+    }
 
     // Convert parameter values to the types viem's encoder expects, walking the
     // parsed ABI so arrays, tuples, and nested tuples coerce element-wise.

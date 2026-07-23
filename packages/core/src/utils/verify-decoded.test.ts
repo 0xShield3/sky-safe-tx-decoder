@@ -387,6 +387,65 @@ describe('verifyDecodedData', () => {
     });
   });
 
+  // The Safe API is untrusted input. A hostile response must never earn a
+  // "verified" result for a decoding that omits or fabricates a parameter.
+  describe('hostile decoded data', () => {
+    // transfer(address,uint256,bool) with force=false. The trailing bool
+    // encodes to a zero word, so a two-parameter decoding of the same bytes
+    // looks plausible to a reader.
+    const threeArgTransfer: Hex =
+      '0xe1ad1162' +
+      '000000000000000000000000d8da6bf26964af9d7eed9e03e53415d37aa96045' +
+      '00000000000000000000000000000000000000000000000000000000000f4240' +
+      '0000000000000000000000000000000000000000000000000000000000000000';
+
+    it('must not verify when a parameter name smuggles in an extra parameter', () => {
+      const decoded: SafeApiDataDecoded = {
+        method: 'transfer',
+        parameters: [
+          { name: 'to', type: 'address', value: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+          // The name closes the parameter list and opens another one
+          { name: 'amount, bool force', type: 'uint256', value: '1000000' },
+        ],
+      };
+
+      const result = verifyDecodedData(threeArgTransfer, decoded);
+
+      expect(result.verified).toBe(false);
+      expect(result.status).toBe('mismatch');
+    });
+
+    it('must not verify when a parameter type smuggles in an extra parameter', () => {
+      const decoded: SafeApiDataDecoded = {
+        method: 'transfer',
+        parameters: [
+          { name: 'to', type: 'address', value: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+          { name: 'amount', type: 'uint256, bool force', value: '1000000' },
+        ],
+      };
+
+      const result = verifyDecodedData(threeArgTransfer, decoded);
+
+      expect(result.verified).toBe(false);
+      expect(result.status).toBe('mismatch');
+      expect(result.error).toContain('expands to 2 parameters');
+    });
+
+    it('must not verify when a type merges two displayed parameters into one', () => {
+      // An unbalanced parenthesis would fold parameters b into a's tuple,
+      // leaving b displayed but never encoded or compared.
+      const decoded: SafeApiDataDecoded = {
+        method: 'q',
+        parameters: [
+          { name: 'a', type: '(uint256', value: ['1'] as unknown as string },
+          { name: 'b)', type: 'address', value: '0x1111111111111111111111111111111111111111' },
+        ],
+      };
+
+      expect(verifyDecodedData('0x12345678', decoded).verified).toBe(false);
+    });
+  });
+
   describe('verification status', () => {
     it('should report a genuine re-encoding difference as a mismatch', () => {
       // transfer(address,uint256) — decoded value claims a different amount
