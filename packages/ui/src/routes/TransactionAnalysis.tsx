@@ -271,6 +271,13 @@ export default function TransactionAnalysis() {
   const hashesMatch = hashes?.safeTxHash === transaction.safeTxHash;
   const hasRisks = security && security.overallRisk !== 'none';
   const hasCustomDecoding = customDecoded || (multiSendTxs && multiSendTxs.length > 0);
+  // Nothing decoded this call: no custom decoder matched and the Safe API
+  // returned no dataDecoded (it has no ABI cached for the target contract).
+  // Say so plainly and show the raw bytes rather than rendering an empty
+  // "Decoded" pane that reads as "this transaction does nothing".
+  const hasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
+  const undecodable = hasCalldata && !hasCustomDecoding && !transaction.dataDecoded;
+  const effectiveViewMode = undecodable ? 'raw' : viewMode;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -439,8 +446,14 @@ export default function TransactionAnalysis() {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewMode('decoded')}
+                disabled={undecodable}
+                title={undecodable ? 'Unable to decode this transaction — showing raw data' : undefined}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === 'decoded' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  undecodable
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : effectiveViewMode === 'decoded'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Decoded
@@ -448,7 +461,7 @@ export default function TransactionAnalysis() {
               <button
                 onClick={() => setViewMode('raw')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  viewMode === 'raw' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  effectiveViewMode === 'raw' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 Raw
@@ -458,7 +471,20 @@ export default function TransactionAnalysis() {
         </div>
 
         <div className="p-6">
-          {viewMode === 'decoded' ? (
+          {undecodable && (
+            <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
+              <p className="font-semibold text-amber-900 mb-2">Unable to decode this transaction</p>
+              <p className="text-sm text-amber-900">
+                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Nothing is known
+                about what this call does. Verify the raw data below against an independent source before signing.
+              </p>
+              <p className="text-sm text-amber-900 mt-2">
+                Hash verification below is unaffected — it does not depend on decoding.
+              </p>
+            </div>
+          )}
+
+          {effectiveViewMode === 'decoded' ? (
             <div className="space-y-6">
               {/* Enhanced Custom Decoder */}
               {customDecoded && (
@@ -472,11 +498,30 @@ export default function TransactionAnalysis() {
                       </div>
                     </div>
                     {customDecoded.main.explanation && (
-                      <div className="text-sm text-gray-700 bg-white p-3 rounded">
+                      // whitespace-pre-wrap: decoder explanations may list one
+                      // item per line (e.g. SPBEAM rate tables) and those line
+                      // breaks are load-bearing for review.
+                      <div className="text-sm text-gray-700 bg-white p-3 rounded whitespace-pre-wrap">
                         <AddressHighlighter text={customDecoded.main.explanation} />
                       </div>
                     )}
                   </div>
+
+                  {/* Decoder self-check failures (e.g. the decoded parameters
+                      do not re-encode to the raw calldata). Shown above the
+                      parameters, because the parameters are what is untrusted. */}
+                  {customDecoded.generalWarnings && customDecoded.generalWarnings.length > 0 && (
+                    <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4">
+                      <p className="font-semibold text-red-900 mb-2">⚠️ Decoder verification failed</p>
+                      <ul className="text-sm space-y-1">
+                        {customDecoded.generalWarnings.map((warning, i) => (
+                          <li key={i} className="text-red-900 break-all">
+                            {warning}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {customDecoded.main.parameters.length > 0 && (
                     <div>
@@ -557,11 +602,9 @@ export default function TransactionAnalysis() {
                 <div className="space-y-4">
                   <div
                     className={`rounded-lg p-4 border ${
-                      multiSendVerification?.verified
-                        ? 'bg-indigo-50 border-indigo-200'
-                        : multiSendVerification?.verified === false
-                          ? 'bg-red-50 border-red-400'
-                          : 'bg-indigo-50 border-indigo-200'
+                      multiSendVerification?.status === 'mismatch'
+                        ? 'bg-red-50 border-red-400'
+                        : 'bg-indigo-50 border-indigo-200'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -569,15 +612,26 @@ export default function TransactionAnalysis() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-indigo-900">MultiSend Batch</p>
-                          {multiSendVerification && !multiSendVerification.verified && (
+                          {multiSendVerification?.status === 'mismatch' && (
                             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
                               ⚠ Mismatch
                             </span>
                           )}
+                          {multiSendVerification?.status === 'unverifiable' && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                              Not verified
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-indigo-700">{multiSendTxs.length} transactions in this batch</p>
-                        {!multiSendVerification?.verified && multiSendVerification?.error && (
+                        {multiSendVerification?.status === 'mismatch' && (
                           <p className="text-xs text-red-700 mt-2">⚠️ Warning: {multiSendVerification.error}</p>
+                        )}
+                        {multiSendVerification?.status === 'unverifiable' && (
+                          <p className="text-xs text-gray-600 mt-2">
+                            Could not re-encode to check this decoding: {multiSendVerification.error}. This is not
+                            evidence of a mismatch — it means the check did not run.
+                          </p>
                         )}
                       </div>
                     </div>
@@ -652,19 +706,32 @@ export default function TransactionAnalysis() {
                         <div className="mt-3 pt-3 border-t border-gray-300">
                           <div
                             className={`rounded p-3 border mb-3 ${
-                              item.verification?.verified ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-400'
+                              item.verification?.status === 'mismatch'
+                                ? 'bg-red-50 border-red-400'
+                                : 'bg-blue-50 border-blue-200'
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
                               <p className="font-semibold text-blue-900">Method: {item.apiDecoded.method}</p>
-                              {item.verification && !item.verification.verified && (
+                              {item.verification?.status === 'mismatch' && (
                                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
                                   ⚠ Mismatch
                                 </span>
                               )}
+                              {item.verification?.status === 'unverifiable' && (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                                  Not verified
+                                </span>
+                              )}
                             </div>
-                            {!item.verification?.verified && item.verification?.error && (
+                            {item.verification?.status === 'mismatch' && (
                               <p className="text-xs text-red-700 mt-2">⚠️ Warning: {item.verification.error}</p>
+                            )}
+                            {item.verification?.status === 'unverifiable' && (
+                              <p className="text-xs text-gray-600 mt-2">
+                                Could not re-encode to check this decoding: {item.verification.error}. This is not
+                                evidence of a mismatch — it means the check did not run.
+                              </p>
                             )}
                           </div>
                           {item.apiDecoded.parameters.length > 0 && (
@@ -693,23 +760,32 @@ export default function TransactionAnalysis() {
                 <div className="space-y-4">
                   <div
                     className={`rounded-lg p-4 border ${
-                      apiDecodedVerification?.verified
-                        ? 'bg-blue-50 border-blue-200'
-                        : apiDecodedVerification?.verified === false
-                          ? 'bg-red-50 border-red-400'
-                          : 'bg-blue-50 border-blue-200'
+                      apiDecodedVerification?.status === 'mismatch'
+                        ? 'bg-red-50 border-red-400'
+                        : 'bg-blue-50 border-blue-200'
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-blue-900">Method: {transaction.dataDecoded.method}</p>
-                      {apiDecodedVerification && !apiDecodedVerification.verified && (
+                      {apiDecodedVerification?.status === 'mismatch' && (
                         <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
                           ⚠ Mismatch
                         </span>
                       )}
+                      {apiDecodedVerification?.status === 'unverifiable' && (
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                          Not verified
+                        </span>
+                      )}
                     </div>
-                    {!apiDecodedVerification?.verified && apiDecodedVerification?.error && (
+                    {apiDecodedVerification?.status === 'mismatch' && (
                       <p className="text-xs text-red-700 mt-2">⚠️ Warning: {apiDecodedVerification.error}</p>
+                    )}
+                    {apiDecodedVerification?.status === 'unverifiable' && (
+                      <p className="text-xs text-gray-600 mt-2">
+                        Could not re-encode to check this decoding: {apiDecodedVerification.error}. This is not evidence
+                        of a mismatch — it means the check did not run.
+                      </p>
                     )}
                   </div>
 

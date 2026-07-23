@@ -5,19 +5,94 @@
  * by re-encoding and comparing to the raw data.
  */
 
-import { encodeFunctionData, parseAbiParameters, type Hex } from 'viem';
+import { encodeFunctionData, parseAbiParameters, type AbiParameter, type Hex } from 'viem';
 import type { SafeApiDataDecoded } from '../types.js';
+
+/**
+ * Outcome of a verification attempt.
+ *
+ * `mismatch` and `unverifiable` are deliberately distinct. "We re-encoded the
+ * decoded parameters and got different bytes than you are about to sign" is a
+ * stop-signing signal. "We had nothing to check against, or could not run the
+ * check" is not. Collapsing them into a single `verified: false` made the UI
+ * raise a red mismatch banner on transactions that were fine, which trains
+ * signers to ignore the banner that matters.
+ */
+export type DecodeVerificationStatus = 'verified' | 'mismatch' | 'unverifiable';
 
 /**
  * Result of verifying decoded data
  */
 export interface DecodeVerificationResult {
-  /** Whether the decoded data matches the raw data */
+  /** True only when re-encoding reproduced the raw data exactly */
   verified: boolean;
-  /** Error message if verification failed */
+  /** Which of the three outcomes occurred — see DecodeVerificationStatus */
+  status: DecodeVerificationStatus;
+  /** Error message if verification did not succeed */
   error?: string;
   /** Re-encoded data (for debugging) */
   reencoded?: Hex;
+}
+
+/** Matches an array type and captures the element type, e.g. `uint256[3]` */
+const ARRAY_TYPE = /^(.*)\[\d*\]$/;
+
+/**
+ * Coerce a Safe API parameter value into what viem's encoder expects.
+ *
+ * The Safe API returns every leaf as a string (or an array/nested array of
+ * strings for arrays and tuples), so integers arrive as `"1000"` rather than
+ * `1000n`. Walk the parsed ABI parameter alongside the value so array, tuple,
+ * and nested-tuple shapes are coerced element by element.
+ *
+ * Array types are checked BEFORE the integer prefix check: `uint256[]` starts
+ * with `uint`, and treating it as a scalar meant calling BigInt() on an array,
+ * which throws and reported a good transaction as unverified.
+ */
+function coerceValue(param: AbiParameter, value: unknown): unknown {
+  const arrayMatch = ARRAY_TYPE.exec(param.type);
+  if (arrayMatch) {
+    const element = { ...param, type: arrayMatch[1]! } as AbiParameter;
+    return toArray(value).map(item => coerceValue(element, item));
+  }
+
+  if (param.type === 'tuple') {
+    // viem accepts a tuple as a positional array, which is the shape the Safe
+    // API uses. Coerce component-wise so nested integers become BigInt.
+    const components = (param as { components?: readonly AbiParameter[] }).components ?? [];
+    const items = toArray(value);
+    return components.map((component, i) => coerceValue(component, items[i]));
+  }
+
+  if (param.type.startsWith('uint') || param.type.startsWith('int')) {
+    return typeof value === 'bigint' ? value : BigInt(String(value).trim());
+  }
+
+  if (param.type === 'bool') {
+    return String(value).toLowerCase() === 'true';
+  }
+
+  // address, string, bytes, bytesN — pass through as the API gave them
+  return value;
+}
+
+/**
+ * Normalise a value into an array. The Safe API usually returns arrays as real
+ * JSON arrays, but has historically returned them as JSON-encoded or
+ * comma-separated strings, so handle those too.
+ */
+function toArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Not JSON — fall through to comma-splitting
+    }
+    return value.split(',').map(s => s.trim());
+  }
+  return [value];
 }
 
 /**
@@ -43,6 +118,7 @@ export function verifyDecodedData(
   if (!decoded) {
     return {
       verified: false,
+      status: 'unverifiable',
       error: 'No decoded data provided',
     };
   }
@@ -51,6 +127,7 @@ export function verifyDecodedData(
   if (!rawData || rawData === '0x') {
     return {
       verified: false,
+      status: 'unverifiable',
       error: 'No raw data to verify against',
     };
   }
@@ -71,40 +148,24 @@ export function verifyDecodedData(
       const verified = rawData === functionSelector;
       return {
         verified,
+        status: verified ? 'verified' : 'mismatch',
         error: verified ? undefined : 'Raw data has extra bytes beyond function selector',
         reencoded: functionSelector,
       };
     }
 
-    // Parse parameter types
+    // Parse parameter types. The Safe API emits tuples as flattened canonical
+    // signatures — `(bytes32,uint256)[]` — which is already viem's
+    // human-readable ABI format, so this handles structs without special cases.
     const abiParameters = parseAbiParameters(
       parameters.map(p => `${p.type} ${p.name}`).join(', ')
     );
 
-    // Convert parameter values to proper types
-    const args = decoded.parameters.map(param => {
-      // Handle different types
-      if (param.type === 'address' || param.type === 'address[]') {
-        return param.value;
-      } else if (param.type.startsWith('uint') || param.type.startsWith('int')) {
-        return BigInt(param.value);
-      } else if (param.type === 'bool') {
-        const strValue = String(param.value).toLowerCase();
-        return strValue === 'true';
-      } else if (param.type === 'bytes' || param.type.startsWith('bytes')) {
-        return param.value as Hex;
-      } else if (param.type.endsWith('[]')) {
-        // Array type - try to parse the value
-        try {
-          const parsed = typeof param.value === 'string' ? JSON.parse(param.value) : param.value;
-          return Array.isArray(parsed) ? parsed : [parsed];
-        } catch {
-          return param.value;
-        }
-      } else {
-        return param.value;
-      }
-    });
+    // Convert parameter values to the types viem's encoder expects, walking the
+    // parsed ABI so arrays, tuples, and nested tuples coerce element-wise.
+    const args = abiParameters.map((abiParam, i) =>
+      coerceValue(abiParam, decoded.parameters[i]?.value)
+    );
 
     // Re-encode the function call
     const reencoded = encodeFunctionData({
@@ -122,13 +183,17 @@ export function verifyDecodedData(
 
     return {
       verified,
+      status: verified ? 'verified' : 'mismatch',
       error: verified ? undefined : 'Re-encoded data does not match raw data',
       reencoded,
     };
   } catch (error) {
+    // We could not run the check (unsupported type, malformed value). This is
+    // NOT evidence of a mismatch, so it must not be reported as one.
     return {
       verified: false,
-      error: `Verification failed: ${error instanceof Error ? error.message : String(error)}`,
+      status: 'unverifiable',
+      error: `Could not verify: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

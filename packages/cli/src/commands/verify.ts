@@ -14,6 +14,7 @@ import {
   createSafeApiClient,
   SafeApiError,
   isNetworkSupported,
+  loadNetworkContracts,
   decoderRegistry,
   LockstakeEngineDecoder,
   calculateSafeTxHash,
@@ -77,6 +78,11 @@ export function createVerifyCommand(): Command {
           console.error(chalk.dim('  Run `sky-safe networks` to see supported networks'))
           process.exit(1)
         }
+
+        // Load this network's built-in contract labels. Without this the
+        // per-network address tags (SPBEAM, LockstakeEngine, USDS, ...) are
+        // never registered and no `To` address is ever labelled in the CLI.
+        loadNetworkContracts(options.network)
 
         // Create API client for network info
         const client = createSafeApiClient(options.network)
@@ -196,6 +202,10 @@ export function createVerifyCommand(): Command {
               const multiSendVerification = verifyDecodedData(tx.data as Hex, tx.dataDecoded)
               if (multiSendVerification.verified) {
                 console.log(chalk.green('\n✓ MultiSend outer transaction verified'))
+              } else if (multiSendVerification.status === 'unverifiable') {
+                // Could not run the check — not the same as a proven mismatch
+                console.log(chalk.dim('\n- MultiSend outer transaction not verified'))
+                console.log(chalk.dim(`  Could not run the re-encode check: ${multiSendVerification.error}`))
               } else {
                 console.log(chalk.red('\n⚠ MultiSend outer transaction verification failed'))
                 if (multiSendVerification.error) {

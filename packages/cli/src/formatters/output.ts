@@ -10,9 +10,25 @@ import type {
   DecodedFunction,
   SecurityAnalysisResult,
   SafeApiDataDecoded,
+  DecodeVerificationStatus,
 } from '@shield3/sky-safe-core'
 import { getAddressTag } from '@shield3/sky-safe-core'
 import type { Address } from 'viem'
+
+/**
+ * Badge for a verification outcome.
+ *
+ * "We re-encoded the decoded parameters and got different bytes" and "we could
+ * not run that check" are different claims, so they get different badges.
+ */
+function verificationBadge(verification: {
+  verified: boolean
+  status?: DecodeVerificationStatus
+}): string {
+  if (verification.verified) return chalk.green('✓ Verified')
+  if (verification.status === 'unverifiable') return chalk.dim('- Not verified')
+  return chalk.red('⚠ Mismatch')
+}
 
 /**
  * Print a section header
@@ -73,7 +89,10 @@ export function printTransactionData(tx: SafeApiMultisigTransaction): void {
  * @param tx - Transaction data
  * @param verification - Optional verification result to display
  */
-export function printDecodedData(tx: SafeApiMultisigTransaction, verification?: { verified: boolean; error?: string } | null): void {
+export function printDecodedData(
+  tx: SafeApiMultisigTransaction,
+  verification?: { verified: boolean; status?: DecodeVerificationStatus; error?: string } | null
+): void {
   if (!tx.dataDecoded) {
     // Check for special cases
     if (!tx.data || tx.data === '0x') {
@@ -89,9 +108,19 @@ export function printDecodedData(tx: SafeApiMultisigTransaction, verification?: 
       printField('Method', method)
       printField('Parameters', '[]')
     } else {
+      // The Safe API returned no decoded data, which means it has no ABI
+      // cached for the target contract. Say that plainly and show the selector
+      // — this tool does not guess a signature from four bytes.
       printHeader('Decoded Data')
-      printField('Method', 'Unknown')
-      printField('Parameters', 'Unknown (no decoding available from API)')
+      printField('Method', 'Unable to decode')
+      printField('Function selector', tx.data.slice(0, 10))
+      console.log(
+        chalk.dim(
+          '  The Safe Transaction Service has no ABI for this contract, so it\n' +
+          '  returned no decoded parameters. Verify the raw calldata above against\n' +
+          '  an independent source before signing.'
+        )
+      )
     }
     return
   }
@@ -100,16 +129,17 @@ export function printDecodedData(tx: SafeApiMultisigTransaction, verification?: 
 
   // Print method with verification status
   if (verification) {
-    const verificationBadge = verification.verified
-      ? chalk.green('✓ Verified')
-      : chalk.red('⚠ Mismatch')
-    console.log(`Method: ${chalk.green(tx.dataDecoded.method)} ${verificationBadge}`)
+    console.log(`Method: ${chalk.green(tx.dataDecoded.method)} ${verificationBadge(verification)}`)
   } else {
     printField('Method', tx.dataDecoded.method)
   }
 
-  // Show verification error if failed
-  if (verification && !verification.verified && verification.error) {
+  // A failed re-encode comparison is a stop signal. Being unable to run the
+  // comparison at all is not — keep them visually distinct.
+  if (verification?.status === 'unverifiable') {
+    console.log(chalk.dim(`  Could not run the re-encode check: ${verification.error}`))
+    console.log(chalk.dim('  This is not evidence of a mismatch.'))
+  } else if (!verification?.verified && verification?.error) {
     console.log(chalk.red(`  ⚠️  Warning: ${verification.error}`))
   }
 
@@ -135,7 +165,7 @@ export function printNestedTransactionData(
   data: string,
   apiDecoded?: SafeApiDataDecoded | null,
   customDecoded?: DecodedTransactionData | null,
-  verification?: { verified: boolean; error?: string } | null
+  verification?: { verified: boolean; status?: DecodeVerificationStatus; error?: string } | null
 ): void {
   console.log(chalk.bold.cyan(`\n[Transaction ${index + 1}/${total}]`))
   console.log(chalk.dim('─'.repeat(50)))
@@ -161,16 +191,15 @@ export function printNestedTransactionData(
 
     // Print method with verification status
     if (verification) {
-      const verificationBadge = verification.verified
-        ? chalk.green('✓ Verified')
-        : chalk.red('⚠ Mismatch')
-      console.log(`  Method: ${chalk.green(apiDecoded.method)} ${verificationBadge}`)
+      console.log(`  Method: ${chalk.green(apiDecoded.method)} ${verificationBadge(verification)}`)
     } else {
       console.log(`  Method: ${chalk.green(apiDecoded.method)}`)
     }
 
-    // Show verification error if failed
-    if (verification && !verification.verified && verification.error) {
+    // Distinguish a proven mismatch from a check that could not run
+    if (verification?.status === 'unverifiable') {
+      console.log(chalk.dim(`    Could not run the re-encode check: ${verification.error}`))
+    } else if (!verification?.verified && verification?.error) {
       console.log(chalk.red(`    ⚠️  Warning: ${verification.error}`))
     }
 
