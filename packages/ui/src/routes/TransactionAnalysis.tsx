@@ -9,6 +9,8 @@ import {
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
+  fetchAbiFromSourcify,
+  decodeWithAbi,
   extractAddressesFromApiDecoded,
   extractAddressesFromDecodedTransaction,
   type SafeApiMultisigTransaction,
@@ -18,6 +20,7 @@ import {
   type SafeApiNestedTransaction,
   type SafeApiDataDecoded,
   type DecodeVerificationResult,
+  type SourcifyDecodeResult,
 } from '@shield3/sky-safe-core';
 import { AddressHighlighter } from '../components/AddressHighlighter';
 import { Address } from '../components/Address';
@@ -26,9 +29,97 @@ import { WeiValue } from '../components/WeiValue';
 import { HashHex } from '../components/HashHex';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
+import { useSettings } from '../settings/SettingsContext';
 
 // Register custom decoders
 decoderRegistry.register(new LockstakeEngineDecoder());
+
+/**
+ * Deep-convert bigints to strings so a decoded value can be rendered.
+ * viem returns integers as bigint, and JSON.stringify (used by ParamValue for
+ * arrays/tuples) throws on bigint. Scalars stay renderable — a numeric string
+ * still gets the decimals picker.
+ */
+function toDisplayValue(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(toDisplayValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, toDisplayValue(v)]));
+  }
+  return value;
+}
+
+/**
+ * Build a canonical function signature from a decoded method name and its
+ * parameter types, e.g. `withdrawV3(address,address,uint256)`. Shown on every
+ * decoded-method box so the Safe API and Sourcify boxes read the same way.
+ */
+function buildSignature(method: string, parameters: Array<{ type: string }>): string {
+  return `${method}(${parameters.map((p) => p.type).join(',')})`;
+}
+
+/**
+ * Shared parameter-row list for a decoded call. Used by the Safe API path and
+ * the Sourcify path — the rows are identical; only the provenance banner above
+ * them differs. Values pass through toDisplayValue so bigints from viem render.
+ */
+function DecodedParamList({ parameters }: { parameters: Array<{ name: string; type: string; value: unknown }> }) {
+  if (parameters.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-700">Parameters:</p>
+      {parameters.map((param, i) => (
+        <div key={i} className="text-xs">
+          <span className="font-semibold">{param.name}</span>
+          <span className="text-gray-500"> ({param.type})</span>
+          <div className="bg-white p-2 rounded border mt-1 break-all">
+            <ParamValue type={param.type} value={toDisplayValue(param.value)} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Render a decoding obtained from a Sourcify ABI. Only the provenance banner is
+ * Sourcify-specific — the source of a decoding matters to a signer, so it is
+ * shown explicitly and distinctly from a Safe API decoding. The parameter rows
+ * reuse DecodedParamList. A result that did not re-encode to the raw calldata
+ * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
+ */
+function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
+  if (!result.verified) {
+    return (
+      <div className="bg-red-50 border-2 border-red-400 rounded p-3">
+        <p className="font-semibold text-red-900 mb-1">⚠️ Sourcify decoding did not match the raw calldata</p>
+        <p className="text-xs text-red-900 break-all">
+          Decoding <span className="font-mono">{result.signature}</span> with the ABI from Sourcify re-encoded to
+          different bytes than this call contains. The parameters cannot be trusted. DO NOT SIGN. Re-encoded:{' '}
+          {result.reencoded}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-blue-50 rounded p-3 border border-blue-200">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-blue-900">Method: {result.method}</p>
+          <span
+            title="ABI from Sourcify, verified against the contract's on-chain bytecode (not the Safe API). The decoded parameters re-encode to the exact bytes in this call."
+            className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 cursor-help"
+          >
+            Sourcify
+          </span>
+        </div>
+        <p className="text-xs font-mono text-blue-700 mt-1">{result.signature}</p>
+      </div>
+      <DecodedParamList parameters={result.parameters} />
+    </div>
+  );
+}
 
 export default function TransactionAnalysis() {
   const navigate = useNavigate();
@@ -43,6 +134,7 @@ export default function TransactionAnalysis() {
   // security analysis (which reads address tags) must re-run whenever either
   // file changes, so we depend on both slots below.
   const { addressBook, mySafes } = useAddressBook();
+  const { sourcifyFallback } = useSettings();
   const [searchParams] = useSearchParams();
   const safeTxHashParam = searchParams.get('safeTxHash');
 
@@ -63,6 +155,12 @@ export default function TransactionAnalysis() {
     apiDecoded?: SafeApiDataDecoded | null;
     verification?: DecodeVerificationResult;
   }> | null>(null);
+  // Sourcify fallback results — a decoding for a call the Safe API could not
+  // decode, keyed by the nested MultiSend index (or 'top' for a direct call).
+  // Each is re-encode-verified in core before it reaches here.
+  const [sourcifyTop, setSourcifyTop] = useState<SourcifyDecodeResult | null>(null);
+  const [sourcifyNested, setSourcifyNested] = useState<Record<number, SourcifyDecodeResult>>({});
+  const [sourcifyLoading, setSourcifyLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Loading transaction...');
   const [error, setError] = useState<string | null>(null);
@@ -256,6 +354,72 @@ export default function TransactionAnalysis() {
     setSecurity(analysis);
   }, [transaction, paramAddresses, addressBook, mySafes, address]);
 
+  // Sourcify fallback: for any call the Safe API could not decode and no custom
+  // decoder covers, fetch the contract's verified ABI from Sourcify and decode
+  // with it. Runs only when the setting is on. Kept separate from the fetch
+  // effect so toggling the setting re-runs only this, and so a slow Sourcify
+  // request never blocks the hash verification. Every result is re-encode-
+  // verified in core before it is stored.
+  useEffect(() => {
+    // Clear prior results whenever the transaction or the setting changes, so a
+    // disabled setting or a new transaction never shows a stale decoding.
+    setSourcifyTop(null);
+    setSourcifyNested({});
+
+    if (!sourcifyFallback || !transaction) return;
+
+    // Build the list of undecodable targets: a direct call with no decoding, or
+    // each nested MultiSend item with neither a custom decoder nor API data.
+    type Target = { key: 'top' | number; to: string; data: string };
+    const targets: Target[] = [];
+
+    const topHasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
+    const topUndecodable = topHasCalldata && !customDecoded && !multiSendTxs && !transaction.dataDecoded;
+    if (topUndecodable && transaction.data) {
+      targets.push({ key: 'top', to: transaction.to, data: transaction.data });
+    }
+
+    if (multiSendTxs) {
+      multiSendTxs.forEach((item, index) => {
+        const data = item.tx.data;
+        if (!item.decoded && !item.apiDecoded && data && data !== '0x') {
+          targets.push({ key: index, to: item.tx.to, data });
+        }
+      });
+    }
+
+    if (targets.length === 0) return;
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    (async () => {
+      setSourcifyLoading(true);
+      try {
+        await Promise.all(
+          targets.map(async (target) => {
+            const abi = await fetchAbiFromSourcify(chainId, target.to, controller.signal);
+            if (!abi || cancelled) return;
+            const decoded = decodeWithAbi(abi, target.data as `0x${string}`);
+            if (!decoded || cancelled) return;
+            if (target.key === 'top') {
+              setSourcifyTop(decoded);
+            } else {
+              setSourcifyNested((prev) => ({ ...prev, [target.key as number]: decoded }));
+            }
+          })
+        );
+      } finally {
+        if (!cancelled) setSourcifyLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [transaction, customDecoded, multiSendTxs, sourcifyFallback, chainId]);
+
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
     navigate(`/safe/${network}/${address}/tx/${nonce}?safeTxHash=${safeTxHash}`);
@@ -293,7 +457,11 @@ export default function TransactionAnalysis() {
   // "Decoded" pane that reads as "this transaction does nothing".
   const hasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
   const undecodable = hasCalldata && !hasCustomDecoding && !transaction.dataDecoded;
-  const effectiveViewMode = undecodable ? 'raw' : viewMode;
+  // Force the raw view and disable the Decoded toggle only while nothing has
+  // decoded the call. A Sourcify fallback result (verified in core) counts as a
+  // decoding, so once it arrives the Decoded view becomes available again.
+  const showRawOnly = undecodable && !sourcifyTop;
+  const effectiveViewMode = showRawOnly ? 'raw' : viewMode;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -462,10 +630,10 @@ export default function TransactionAnalysis() {
             <div className="flex gap-2">
               <button
                 onClick={() => setViewMode('decoded')}
-                disabled={undecodable}
-                title={undecodable ? 'Unable to decode this transaction — showing raw data' : undefined}
+                disabled={showRawOnly}
+                title={showRawOnly ? 'Unable to decode this transaction — showing raw data' : undefined}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  undecodable
+                  showRawOnly
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : effectiveViewMode === 'decoded'
                       ? 'bg-blue-600 text-white'
@@ -487,12 +655,23 @@ export default function TransactionAnalysis() {
         </div>
 
         <div className="p-6">
-          {undecodable && (
+          {undecodable && sourcifyTop && (
+            <div className="mb-6">
+              <SourcifyDecodedView result={sourcifyTop} />
+            </div>
+          )}
+
+          {undecodable && !sourcifyTop && (
             <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
               <p className="font-semibold text-amber-900 mb-2">Unable to decode this transaction</p>
               <p className="text-sm text-amber-900">
-                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Nothing is known about
-                what this call does. Verify the raw data below against an independent source before signing.
+                The Safe API has no ABI for this contract, and no decoder in this tool covers it.
+                {sourcifyFallback
+                  ? sourcifyLoading
+                    ? ' Checking Sourcify for a verified ABI…'
+                    : ' Sourcify has no verified ABI for it either.'
+                  : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
+                Verify the raw data below against an independent source before signing.
               </p>
               <p className="text-sm text-amber-900 mt-2">
                 Hash verification below is unaffected — it does not depend on decoding.
@@ -763,21 +942,11 @@ export default function TransactionAnalysis() {
                                 Nothing shown here has been verified — read the Raw view before signing.
                               </p>
                             )}
+                            <p className="text-xs font-mono text-blue-700 mt-1">
+                              {buildSignature(item.apiDecoded.method, item.apiDecoded.parameters)}
+                            </p>
                           </div>
-                          {item.apiDecoded.parameters.length > 0 && (
-                            <div className="space-y-2">
-                              <p className="text-xs font-semibold text-gray-700">Parameters:</p>
-                              {item.apiDecoded.parameters.map((param, i) => (
-                                <div key={i} className="text-xs">
-                                  <span className="font-semibold">{param.name}</span>
-                                  <span className="text-gray-500"> ({param.type})</span>
-                                  <div className="bg-white p-2 rounded border mt-1 break-all">
-                                    <ParamValue type={param.type} value={param.value} />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <DecodedParamList parameters={item.apiDecoded.parameters} />
                         </div>
                       )}
 
@@ -791,12 +960,19 @@ export default function TransactionAnalysis() {
                           and is labelled as such. */}
                       {!item.decoded && !item.apiDecoded && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
-                          {item.tx.data && item.tx.data !== '0x' ? (
+                          {sourcifyNested[idx] ? (
+                            <SourcifyDecodedView result={sourcifyNested[idx]!} />
+                          ) : item.tx.data && item.tx.data !== '0x' ? (
                             <div className="bg-amber-50 rounded p-3 border border-amber-200">
                               <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
                               <p className="text-xs text-amber-800 mb-3">
-                                Neither the Safe API nor this tool could decode this call. Verify the raw calldata below
-                                against an independent source before signing.
+                                Neither the Safe API nor this tool could decode this call.
+                                {sourcifyFallback
+                                  ? sourcifyLoading
+                                    ? ' Checking Sourcify for a verified ABI…'
+                                    : ' Sourcify has no verified ABI for it either.'
+                                  : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
+                                Verify the raw calldata below against an independent source before signing.
                               </p>
                               <p className="text-xs font-semibold text-gray-700">Function selector:</p>
                               <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">
@@ -849,6 +1025,9 @@ export default function TransactionAnalysis() {
                         shown here has been verified — read the Raw view before signing.
                       </p>
                     )}
+                    <p className="text-xs font-mono text-blue-700 mt-1">
+                      {buildSignature(transaction.dataDecoded.method, transaction.dataDecoded.parameters)}
+                    </p>
                   </div>
 
                   {transaction.dataDecoded.parameters.length > 0 && (
