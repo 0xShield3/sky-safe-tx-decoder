@@ -11,6 +11,7 @@
 
 import { useState } from 'react';
 import { useAddressBook } from '../address-book/AddressBookContext';
+import { useSettings } from '../settings/SettingsContext';
 import { EntryTable } from '../address-book/tables';
 import { downloadCsv } from '../address-book/download';
 import type { AddressBookSafe, AddressBookSkippedRow } from '@shield3/sky-safe-core';
@@ -224,6 +225,7 @@ function MySafesTable({ safes }: { safes: AddressBookSafe[] }) {
 
 export default function Settings() {
   const { addressBook, mySafes, exportMySafes } = useAddressBook();
+  const { sourcifyFallback, setSourcifyFallback } = useSettings();
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -234,6 +236,32 @@ export default function Settings() {
           you keep externally are the source of truth; drag them onto the bar above to load them each session.
         </p>
       </div>
+
+      {/* Decoding — Sourcify fallback */}
+      <section>
+        <h3 className="text-xl font-semibold mb-1">Decoding</h3>
+        <label className="flex items-start gap-3 mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sourcifyFallback}
+            onChange={(e) => setSourcifyFallback(e.target.checked)}
+            className="mt-1 h-4 w-4"
+          />
+          <span className="text-sm">
+            <span className="font-semibold">Sourcify ABI fallback</span>
+            <span className="block text-gray-600 mt-1">
+              When the Safe Transaction Service returns no decoded data for a call, fetch the contract's verified ABI
+              from Sourcify and decode with it. The result is always re-encoded and byte-compared against the raw
+              calldata before it is shown — the same check applied to Safe API decodings.
+            </span>
+            <span className="block text-amber-700 mt-1">
+              On by default. It sends the contract address to sourcify.dev, revealing which contract — and so which
+              transaction — you are inspecting. Turn it off to avoid that request; the offline build then makes no call
+              to Sourcify.
+            </span>
+          </span>
+        </label>
+      </section>
 
       {/* My Safes — add / edit / remove + export */}
       <section>
