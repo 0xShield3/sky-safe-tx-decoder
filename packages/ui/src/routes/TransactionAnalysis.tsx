@@ -77,6 +77,22 @@ export default function TransactionAnalysis() {
         setError(null);
         setLoadingMessage('Loading transaction...');
 
+        // Reset every decoded slot before fetching. This effect re-runs when
+        // the transaction changes (a nonce change, or a safeTxHash switch via
+        // the same-nonce dropdown), but the component instance is reused, so
+        // its state persists. Each setter below is written only inside its own
+        // branch — a MultiSend sets multiSendTxs, a custom-decoded direct call
+        // sets customDecoded, and so on. Without clearing here, a transaction
+        // that takes a different branch than the previous one leaves the prior
+        // transaction's decode in place, and the Decoded pane would render one
+        // transaction's operations under another transaction's hash. Clear all
+        // of them so the pane only ever shows the current transaction.
+        setCustomDecoded(null);
+        setMultiSendTxs(null);
+        setApiDecodedVerification(null);
+        setMultiSendVerification(null);
+        setParamAddresses([]);
+
         const client = new SafeApiClient(network, (message) => {
           setLoadingMessage(message);
         });
