@@ -36,12 +36,17 @@ const DOT: Record<Tone, string> = {
   rejected: 'bg-gray-500',
 };
 
-/** Absolute local time plus a coarse relative suffix. */
+/**
+ * Absolute time plus a coarse relative suffix. Rendered in the viewer's local
+ * time zone (via toLocaleString) with the zone name shown — `timeZoneName:
+ * 'short'` appends the local zone (e.g. "PST", "GMT+1"), so the time is never
+ * ambiguous about whether it is UTC or local.
+ */
 function formatTime(iso: string | null): string {
   if (!iso) return 'pending';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const abs = d.toLocaleString();
+  const abs = d.toLocaleString(undefined, { timeZoneName: 'short' });
   const diffMs = Date.now() - d.getTime();
   const rel = relative(diffMs);
   return rel ? `${abs} (${rel})` : abs;
@@ -66,15 +71,28 @@ function relative(diffMs: number): string {
 }
 
 /**
- * Concise lifecycle summary for the transaction list: always the proposed time,
- * plus the terminal time (executed or reverted) when the transaction has one.
+ * Compact lifecycle log for a transaction-list row: proposed, each signer, and
+ * the terminal event (executed / reverted). Actors are returned as raw
+ * addresses so the list can render them through <Address> (never abbreviated).
  */
-export function conciseTimeline(tx: SafeApiMultisigTransaction): Array<{ label: string; time: string }> {
-  const rows = [{ label: 'Proposed', time: formatTime(tx.submissionDate) }];
+export function conciseTimeline(
+  tx: SafeApiMultisigTransaction
+): Array<{ label: string; time: string; actor?: string }> {
+  const rows: Array<{ label: string; time: string; actor?: string }> = [
+    { label: 'Proposed', time: formatTime(tx.submissionDate), actor: tx.proposer || undefined },
+  ];
+
+  for (const c of [...(tx.confirmations || [])].sort(
+    (a, b) => new Date(a.submissionDate).getTime() - new Date(b.submissionDate).getTime()
+  )) {
+    rows.push({ label: 'Signed', time: formatTime(c.submissionDate), actor: c.owner });
+  }
+
   if (tx.isExecuted) {
     rows.push({
       label: tx.isSuccessful === false ? 'Reverted' : 'Executed',
       time: formatTime(tx.executionDate),
+      actor: tx.executor || undefined,
     });
   }
   return rows;

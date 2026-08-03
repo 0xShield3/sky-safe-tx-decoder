@@ -212,11 +212,21 @@ export default function SafeTransactions() {
                       <span className="text-gray-600">Confirmations:</span> {tx.confirmations.length}/
                       {tx.confirmationsRequired}
                     </div>
-                    {conciseTimeline(tx).map((row) => (
-                      <div key={row.label} className="text-gray-500">
-                        <span className="text-gray-600">{row.label}:</span> {row.time}
-                      </div>
-                    ))}
+                    {/* Compact lifecycle log, indented under confirmations. */}
+                    <div className="mt-1 ml-1 space-y-0.5 border-l-2 border-gray-200 pl-3">
+                      {conciseTimeline(tx).map((row, i) => (
+                        <div key={i} className="flex flex-wrap items-center gap-1 text-xs text-gray-500">
+                          <span className="font-medium text-gray-600">{row.label}</span>
+                          <span>· {row.time}</span>
+                          {row.actor && (
+                            <>
+                              <span>by</span>
+                              <Address address={row.actor} />
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
