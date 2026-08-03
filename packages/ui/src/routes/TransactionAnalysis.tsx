@@ -764,6 +764,36 @@ export default function TransactionAnalysis() {
                           )}
                         </div>
                       )}
+
+                      {/* Neither a custom decoder nor the Safe API could decode
+                          this nested call. Previously this rendered nothing at
+                          all, so a call carrying real calldata showed only
+                          To/Value/Operation — the function and its arguments
+                          were hidden. Show the selector and the full calldata
+                          so the signer can see and verify what is being called.
+                          A call with no calldata is a plain value/no-op call
+                          and is labelled as such. */}
+                      {!item.decoded && !item.apiDecoded && (
+                        <div className="mt-3 pt-3 border-t border-gray-300">
+                          {item.tx.data && item.tx.data !== '0x' ? (
+                            <div className="bg-amber-50 rounded p-3 border border-amber-200">
+                              <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
+                              <p className="text-xs text-amber-800 mb-3">
+                                Neither the Safe API nor this tool could decode this call. Verify the raw calldata below
+                                against an independent source before signing.
+                              </p>
+                              <p className="text-xs font-semibold text-gray-700">Function selector:</p>
+                              <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">
+                                {item.tx.data.slice(0, 10)}
+                              </p>
+                              <p className="text-xs font-semibold text-gray-700">Calldata:</p>
+                              <p className="text-xs font-mono bg-white p-2 rounded border break-all">{item.tx.data}</p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-500">No calldata — this is a plain value/no-op call.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
