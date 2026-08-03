@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SafeApiClient, type SafeApiMultisigTransaction, getSafeUrl, getEtherscanAddressUrl } from '@shield3/sky-safe-core';
+import {
+  SafeApiClient,
+  type SafeApiMultisigTransaction,
+  getSafeUrl,
+  getEtherscanAddressUrl,
+} from '@shield3/sky-safe-core';
 import { Address } from '../components/Address';
 import { WeiValue } from '../components/WeiValue';
+import { conciseTimeline } from '../components/TransactionLog';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 
 export default function SafeTransactions() {
@@ -38,7 +44,8 @@ export default function SafeTransactions() {
         if (err instanceof Error) {
           // Check for rate limiting (429 status)
           if (err.message.includes('429') || err.message.toLowerCase().includes('rate limit')) {
-            errorMessage = 'Rate limited by Safe API. Please try again in a moment. Safe rate limits the public API for security.';
+            errorMessage =
+              'Rate limited by Safe API. Please try again in a moment. Safe rate limits the public API for security.';
           } else {
             errorMessage = err.message;
           }
@@ -64,9 +71,7 @@ export default function SafeTransactions() {
     }
   };
 
-  const filteredTransactions = showPendingOnly
-    ? transactions.filter(tx => !tx.isExecuted)
-    : transactions;
+  const filteredTransactions = showPendingOnly ? transactions.filter((tx) => !tx.isExecuted) : transactions;
 
   if (loading) {
     return (
@@ -97,7 +102,9 @@ export default function SafeTransactions() {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-2xl font-bold mb-2">Safe Transactions</h2>
-            <p className="text-gray-600 text-sm mb-1">Safe: <Address address={address} /></p>
+            <p className="text-gray-600 text-sm mb-1">
+              Safe: <Address address={address} />
+            </p>
             <p className="text-gray-600 text-sm">Network: {network}</p>
           </div>
           <div className="flex gap-2">
@@ -174,24 +181,23 @@ export default function SafeTransactions() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
-                      Nonce: {tx.nonce}
-                    </span>
-                    <span className={`text-sm px-2 py-1 rounded ${
-                      tx.isExecuted
-                        ? tx.isSuccessful
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">Nonce: {tx.nonce}</span>
+                    <span
+                      className={`text-sm px-2 py-1 rounded ${
+                        tx.isExecuted
+                          ? tx.isSuccessful
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
                       {tx.isExecuted ? (tx.isSuccessful ? 'Executed' : 'Failed') : 'Pending'}
                     </span>
                   </div>
 
                   <div className="space-y-1 text-sm">
                     <div>
-                      <span className="text-gray-600">To:</span>{' '}
-                      <Address address={tx.to} />
+                      <span className="text-gray-600">To:</span> <Address address={tx.to} />
                     </div>
                     <div>
                       <span className="text-gray-600">Value:</span> <WeiValue value={tx.value} />
@@ -203,16 +209,15 @@ export default function SafeTransactions() {
                       </div>
                     )}
                     <div>
-                      <span className="text-gray-600">Confirmations:</span>{' '}
-                      {tx.confirmations.length}/{tx.confirmationsRequired}
+                      <span className="text-gray-600">Confirmations:</span> {tx.confirmations.length}/
+                      {tx.confirmationsRequired}
                     </div>
+                    <div className="text-gray-500">{conciseTimeline(tx)}</div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">
-                    Analyze →
-                  </button>
+                  <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">Analyze →</button>
                 </div>
               </div>
             </div>

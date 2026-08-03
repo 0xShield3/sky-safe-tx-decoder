@@ -115,6 +115,10 @@ export interface SafeApiMultisigTransaction {
   transactionHash: string | null
   safeTxHash: string
   executor: Address | null
+  /** Address that proposed the transaction to the service. */
+  proposer: Address | null
+  /** Delegate address, when the transaction was proposed via a delegate. */
+  proposedByDelegate: Address | null
   isExecuted: boolean
   isSuccessful: boolean | null
   ethGasPrice: string | null
