@@ -66,15 +66,18 @@ function relative(diffMs: number): string {
 }
 
 /**
- * One-line lifecycle summary for the transaction list: the state plus the
- * timestamp that matters for that state.
+ * Concise lifecycle summary for the transaction list: always the proposed time,
+ * plus the terminal time (executed or reverted) when the transaction has one.
  */
-export function conciseTimeline(tx: SafeApiMultisigTransaction): string {
+export function conciseTimeline(tx: SafeApiMultisigTransaction): Array<{ label: string; time: string }> {
+  const rows = [{ label: 'Proposed', time: formatTime(tx.submissionDate) }];
   if (tx.isExecuted) {
-    const when = formatTime(tx.executionDate);
-    return tx.isSuccessful === false ? `Reverted ${when}` : `Executed ${when}`;
+    rows.push({
+      label: tx.isSuccessful === false ? 'Reverted' : 'Executed',
+      time: formatTime(tx.executionDate),
+    });
   }
-  return `Proposed ${formatTime(tx.submissionDate)}`;
+  return rows;
 }
 
 /** An on-chain rejection is a 0-value, no-data call from the Safe to itself. */

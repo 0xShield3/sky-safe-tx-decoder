@@ -212,7 +212,11 @@ export default function SafeTransactions() {
                       <span className="text-gray-600">Confirmations:</span> {tx.confirmations.length}/
                       {tx.confirmationsRequired}
                     </div>
-                    <div className="text-gray-500">{conciseTimeline(tx)}</div>
+                    {conciseTimeline(tx).map((row) => (
+                      <div key={row.label} className="text-gray-500">
+                        <span className="text-gray-600">{row.label}:</span> {row.time}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
