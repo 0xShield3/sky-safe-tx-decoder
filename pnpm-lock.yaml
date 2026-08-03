@@ -79,6 +79,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@ethereum-sourcify/clear-signing':
+        specifier: 0.2.2
+        version: 0.2.2
       '@shield3/sky-safe-core':
         specifier: workspace:*
         version: link:../core
@@ -550,6 +553,10 @@ packages:
   '@eslint/js@8.57.1':
     resolution: {integrity: sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
+
+  '@ethereum-sourcify/clear-signing@0.2.2':
+    resolution: {integrity: sha512-iSgdIp6FB0T6UegIM4PlWozlePc2bAy80T4ly1zAvilGgnEAiKhkRJICiLwdhY5mdnQ7rnVYhcOClFFTBrcZtw==}
+    engines: {node: '>=22.0.0'}
 
   '@humanwhocodes/config-array@0.13.0':
     resolution: {integrity: sha512-DZLEEqFWQFiyK6h5YIeynKx7JlvCYWL0cImfSRXZ9l4Sg2efkFGTuFf6vzXjK1cq6IYkU+Eg/JizXw+TD2vRNw==}
@@ -2372,6 +2379,10 @@ snapshots:
       - supports-color
 
   '@eslint/js@8.57.1': {}
+
+  '@ethereum-sourcify/clear-signing@0.2.2':
+    dependencies:
+      '@noble/hashes': 1.8.0
 
   '@humanwhocodes/config-array@0.13.0':
     dependencies:

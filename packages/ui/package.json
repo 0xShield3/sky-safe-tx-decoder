@@ -10,6 +10,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@ethereum-sourcify/clear-signing": "0.2.2",
     "@shield3/sky-safe-core": "workspace:*",
     "react": "18.3.0",
     "react-dom": "18.3.0",

@@ -30,6 +30,8 @@ import { HashHex } from '../components/HashHex';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 import { useSettings } from '../settings/SettingsContext';
+// SPIKE: ERC-7730 clear-signing preview. See clear-signing/clearSigning.ts.
+import { clearSignSafeTx, clearSignCalldata, type ClearSignResult } from '../clear-signing/clearSigning';
 
 // Register custom decoders
 decoderRegistry.register(new LockstakeEngineDecoder());
@@ -121,6 +123,42 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
   );
 }
 
+/**
+ * SPIKE: render an ERC-7730 clear-signing result. Deliberately styled distinct
+ * (teal, "PREVIEW" tag) from the verified decode boxes, because this is NOT run
+ * through the re-encode-and-compare gate yet — it is shown for evaluation.
+ */
+function ClearSignView({ title, result }: { title: string; result: ClearSignResult }) {
+  return (
+    <div className="bg-teal-50 border border-teal-300 rounded p-3">
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-teal-200 text-teal-900">ERC-7730</span>
+        <span
+          title="Clear-signing preview from the Ledger ERC-7730 registry. NOT yet verified against the raw calldata — evaluation only."
+          className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-200 text-amber-900 cursor-help"
+        >
+          PREVIEW · unverified
+        </span>
+        <span className="text-xs text-teal-800">{title}</span>
+      </div>
+      {result.intent && <p className="font-semibold text-teal-900">{result.interpolatedIntent || result.intent}</p>}
+      {result.fields.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {result.fields.map((f, i) => (
+            <div key={i} className="text-xs">
+              <span className="font-semibold text-gray-700">{f.label}:</span>{' '}
+              <span className="font-mono break-all">
+                {typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value ?? '')}
+              </span>
+              {f.warning && <span className="ml-1 text-amber-700">({f.warning.message})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TransactionAnalysis() {
   const navigate = useNavigate();
   const params = useParams<{ nonce: string }>();
@@ -161,6 +199,12 @@ export default function TransactionAnalysis() {
   const [sourcifyTop, setSourcifyTop] = useState<SourcifyDecodeResult | null>(null);
   const [sourcifyNested, setSourcifyNested] = useState<Record<number, SourcifyDecodeResult>>({});
   const [sourcifyLoading, setSourcifyLoading] = useState(false);
+  // SPIKE: ERC-7730 clear-signing previews. safeTxClear = the SafeTx envelope
+  // (the Ledger view of the whole tx); topClear/nestedClear = per-call renders
+  // where the registry has a descriptor. None are re-encode-verified yet.
+  const [safeTxClear, setSafeTxClear] = useState<ClearSignResult | null>(null);
+  const [topClear, setTopClear] = useState<ClearSignResult | null>(null);
+  const [nestedClear, setNestedClear] = useState<Record<number, ClearSignResult>>({});
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Loading transaction...');
   const [error, setError] = useState<string | null>(null);
@@ -420,6 +464,57 @@ export default function TransactionAnalysis() {
     };
   }, [transaction, customDecoded, multiSendTxs, sourcifyFallback, chainId]);
 
+  // SPIKE: ERC-7730 clear-signing previews. Renders the SafeTx envelope (the
+  // Ledger view) and per-call intent where the registry has a descriptor.
+  // Fetches the registry index from the network; fails closed to null. Gated
+  // behind the Sourcify setting to reuse the same "allow network decoding
+  // lookups" consent. NOT re-encode-verified — labelled a preview in the UI.
+  useEffect(() => {
+    setSafeTxClear(null);
+    setTopClear(null);
+    setNestedClear({});
+
+    if (!sourcifyFallback || !transaction || !version) return;
+
+    let cancelled = false;
+    (async () => {
+      const safeTx = {
+        to: transaction.to,
+        value: transaction.value,
+        data: transaction.data ?? '0x',
+        operation: transaction.operation,
+        safeTxGas: transaction.safeTxGas.toString(),
+        baseGas: transaction.baseGas.toString(),
+        gasPrice: transaction.gasPrice,
+        gasToken: transaction.gasToken,
+        refundReceiver: transaction.refundReceiver,
+        nonce: transaction.nonce.toString(),
+      };
+
+      const envelope = await clearSignSafeTx(chainId, version, safeTx);
+      if (!cancelled && envelope) setSafeTxClear(envelope);
+
+      if (transaction.data && transaction.data !== '0x') {
+        const top = await clearSignCalldata(chainId, transaction.to, transaction.data);
+        if (!cancelled && top) setTopClear(top);
+      }
+
+      if (multiSendTxs) {
+        await Promise.all(
+          multiSendTxs.map(async (item, index) => {
+            if (!item.tx.data || item.tx.data === '0x') return;
+            const r = await clearSignCalldata(chainId, item.tx.to, item.tx.data);
+            if (!cancelled && r) setNestedClear((prev) => ({ ...prev, [index]: r }));
+          })
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transaction, version, multiSendTxs, sourcifyFallback, chainId]);
+
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
     navigate(`/safe/${network}/${address}/tx/${nonce}?safeTxHash=${safeTxHash}`);
@@ -613,6 +708,27 @@ export default function TransactionAnalysis() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SPIKE: ERC-7730 clear-signing of the SafeTx envelope — the human
+          readable view a Ledger renders for this Safe transaction. */}
+      {safeTxClear && (
+        <div className="border-2 border-teal-300 rounded-lg overflow-hidden">
+          <div className="bg-teal-100 p-3 border-b border-teal-300">
+            <h3 className="text-lg font-bold text-teal-900">Clear signing (ERC-7730) — what your device shows</h3>
+            <p className="text-xs text-teal-800 mt-1">
+              Spike preview from the Ledger clear-signing registry. Not yet verified against the raw calldata.
+            </p>
+          </div>
+          <div className="p-4">
+            <ClearSignView title="SafeTx envelope" result={safeTxClear} />
+            {topClear && (
+              <div className="mt-3">
+                <ClearSignView title="Call" result={topClear} />
               </div>
             )}
           </div>
@@ -984,6 +1100,15 @@ export default function TransactionAnalysis() {
                           ) : (
                             <p className="text-xs text-gray-500">No calldata — this is a plain value/no-op call.</p>
                           )}
+                        </div>
+                      )}
+
+                      {/* SPIKE: ERC-7730 clear-signing for this nested call,
+                          shown alongside our own decode where the registry
+                          covers the contract. */}
+                      {nestedClear[idx] && (
+                        <div className="mt-3 pt-3 border-t border-gray-300">
+                          <ClearSignView title={`Nested call #${idx + 1}`} result={nestedClear[idx]!} />
                         </div>
                       )}
                     </div>
