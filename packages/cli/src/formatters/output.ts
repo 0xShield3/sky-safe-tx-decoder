@@ -12,7 +12,7 @@ import type {
   SafeApiDataDecoded,
   DecodeVerificationStatus,
 } from '@shield3/sky-safe-core';
-import { getAddressTag } from '@shield3/sky-safe-core';
+import { getAddressTag, isApiFallbackSentinel } from '@shield3/sky-safe-core';
 import type { Address } from 'viem';
 
 /**
@@ -90,7 +90,9 @@ export function printDecodedData(
   tx: SafeApiMultisigTransaction,
   verification?: { verified: boolean; status?: DecodeVerificationStatus; error?: string } | null
 ): void {
-  if (!tx.dataDecoded) {
+  // The Safe "fallback" sentinel means the service could not decode the call —
+  // handle it like no decoded data (show the selector / raw), not a real method.
+  if (!tx.dataDecoded || isApiFallbackSentinel(tx.dataDecoded)) {
     // Check for special cases
     if (!tx.data || tx.data === '0x') {
       const method =

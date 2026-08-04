@@ -38,6 +38,25 @@ export interface DecodeVerificationResult {
 const ARRAY_TYPE = /^(.*)\[\d*\]$/;
 
 /**
+ * Whether a Safe API decoding is the service's "could not decode" sentinel.
+ *
+ * When the Safe Transaction Service has no ABI entry for a call's selector, it
+ * does not return null — it returns `{ method: "fallback", parameters: [] }`,
+ * as if the call hit the contract's fallback function. That is almost never a
+ * faithful decoding: the calldata carries a real 4-byte selector and often
+ * arguments (e.g. Aave `supply(...)` decoded as `fallback`).
+ *
+ * Treating it as a real decoding is misleading both ways: re-encoding
+ * `fallback()` to just the selector flags a red mismatch on a call that has
+ * arguments, and a zero-argument call whose data IS just its selector would
+ * "verify" as `fallback`, hiding the real function. Callers should treat this
+ * as "not decoded" and fall through to their undecodable handling instead.
+ */
+export function isApiFallbackSentinel(decoded: SafeApiDataDecoded | null | undefined): boolean {
+  return !!decoded && decoded.method === 'fallback' && (decoded.parameters?.length ?? 0) === 0;
+}
+
+/**
  * Coerce a Safe API parameter value into what viem's encoder expects.
  *
  * The Safe API returns every leaf as a string (or an array/nested array of
@@ -53,7 +72,7 @@ function coerceValue(param: AbiParameter, value: unknown): unknown {
   const arrayMatch = ARRAY_TYPE.exec(param.type);
   if (arrayMatch) {
     const element = { ...param, type: arrayMatch[1]! } as AbiParameter;
-    return toArray(value).map(item => coerceValue(element, item));
+    return toArray(value).map((item) => coerceValue(element, item));
   }
 
   if (param.type === 'tuple') {
@@ -90,7 +109,7 @@ function toArray(value: unknown): unknown[] {
     } catch {
       // Not JSON — fall through to comma-splitting
     }
-    return value.split(',').map(s => s.trim());
+    return value.split(',').map((s) => s.trim());
   }
   return [value];
 }
@@ -110,10 +129,7 @@ function toArray(value: unknown): unknown[] {
  *   console.warn('⚠️ Decoded data mismatch:', result.error);
  * }
  */
-export function verifyDecodedData(
-  rawData: Hex | null,
-  decoded: SafeApiDataDecoded | null
-): DecodeVerificationResult {
+export function verifyDecodedData(rawData: Hex | null, decoded: SafeApiDataDecoded | null): DecodeVerificationResult {
   // If no decoded data provided, we can't verify
   if (!decoded) {
     return {
@@ -137,7 +153,7 @@ export function verifyDecodedData(
     const functionSelector = rawData.slice(0, 10) as Hex;
 
     // Build ABI from decoded data
-    const parameters = decoded.parameters.map(param => ({
+    const parameters = decoded.parameters.map((param) => ({
       name: param.name,
       type: param.type,
     }));
@@ -191,17 +207,17 @@ export function verifyDecodedData(
 
     // Convert parameter values to the types viem's encoder expects, walking the
     // parsed ABI so arrays, tuples, and nested tuples coerce element-wise.
-    const args = abiParameters.map((abiParam, i) =>
-      coerceValue(abiParam, decoded.parameters[i]?.value)
-    );
+    const args = abiParameters.map((abiParam, i) => coerceValue(abiParam, decoded.parameters[i]?.value));
 
     // Re-encode the function call
     const reencoded = encodeFunctionData({
-      abi: [{
-        name: decoded.method,
-        type: 'function',
-        inputs: abiParameters,
-      }],
+      abi: [
+        {
+          name: decoded.method,
+          type: 'function',
+          inputs: abiParameters,
+        },
+      ],
       functionName: decoded.method,
       args,
     });
@@ -235,5 +251,5 @@ export function verifyDecodedData(
 export function verifyNestedTransactions(
   nestedTxs: Array<{ data: Hex; decoded: SafeApiDataDecoded | null }>
 ): DecodeVerificationResult[] {
-  return nestedTxs.map(tx => verifyDecodedData(tx.data, tx.decoded));
+  return nestedTxs.map((tx) => verifyDecodedData(tx.data, tx.decoded));
 }

@@ -3,9 +3,36 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { verifyDecodedData } from './verify-decoded.js';
+import { verifyDecodedData, isApiFallbackSentinel } from './verify-decoded.js';
 import type { Hex } from 'viem';
 import type { SafeApiDataDecoded } from '../types.js';
+
+describe('isApiFallbackSentinel', () => {
+  it('detects the Safe "could not decode" sentinel', () => {
+    expect(isApiFallbackSentinel({ method: 'fallback', parameters: [] })).toBe(true);
+  });
+
+  it('does not treat a real decoding as the sentinel', () => {
+    expect(
+      isApiFallbackSentinel({
+        method: 'transfer',
+        parameters: [{ name: 'to', type: 'address', value: '0x0000000000000000000000000000000000000001' }],
+      })
+    ).toBe(false);
+  });
+
+  it('does not treat a real fallback WITH parameters as the sentinel', () => {
+    // If Safe ever returned a fallback decoding carrying data, that is a genuine
+    // decoding, not the empty sentinel.
+    expect(
+      isApiFallbackSentinel({ method: 'fallback', parameters: [{ name: 'x', type: 'bytes', value: '0x00' }] })
+    ).toBe(false);
+  });
+
+  it('is false for null', () => {
+    expect(isApiFallbackSentinel(null)).toBe(false);
+  });
+});
 
 describe('verifyDecodedData', () => {
   it('should verify a simple ERC20 transfer', () => {

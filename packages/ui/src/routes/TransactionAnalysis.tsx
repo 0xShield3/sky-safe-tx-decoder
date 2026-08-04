@@ -9,6 +9,7 @@ import {
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
+  isApiFallbackSentinel,
   extractAddressesFromApiDecoded,
   extractAddressesFromDecodedTransaction,
   type SafeApiMultisigTransaction,
@@ -175,8 +176,12 @@ export default function TransactionAnalysis() {
                   extracted.push(...extractAddressesFromDecodedTransaction(customDecoded));
                 }
 
-                // Get corresponding Safe API decoded data
-                const apiDecoded = apiNestedTxs?.[index]?.dataDecoded || null;
+                // Get corresponding Safe API decoded data. Treat the Safe
+                // service's "fallback" sentinel as no decoding, so an
+                // undecodable call falls through to the raw/selector view
+                // instead of being re-encode-checked as fallback() and flagged.
+                const rawApiDecoded = apiNestedTxs?.[index]?.dataDecoded || null;
+                const apiDecoded = isApiFallbackSentinel(rawApiDecoded) ? null : rawApiDecoded;
 
                 // Verify Safe API decoded data against raw data
                 const verification = apiDecoded ? verifyDecodedData(nestedTx.data, apiDecoded) : undefined;
@@ -193,8 +198,10 @@ export default function TransactionAnalysis() {
               setCustomDecoded(decoded);
               extracted.push(...extractAddressesFromDecodedTransaction(decoded));
             } else {
-              // If no custom decoder but Safe API has decoded data, verify it
-              if (tx.dataDecoded) {
+              // If no custom decoder but Safe API has a real decoding, verify
+              // it. The "fallback" sentinel is not a real decoding — skip it so
+              // the call is treated as undecodable rather than flagged.
+              if (tx.dataDecoded && !isApiFallbackSentinel(tx.dataDecoded)) {
                 const verification = verifyDecodedData(tx.data as `0x${string}`, tx.dataDecoded);
                 setApiDecodedVerification(verification);
               }
@@ -291,8 +298,11 @@ export default function TransactionAnalysis() {
   // returned no dataDecoded (it has no ABI cached for the target contract).
   // Say so plainly and show the raw bytes rather than rendering an empty
   // "Decoded" pane that reads as "this transaction does nothing".
+  // The Safe API's "fallback" sentinel is not a usable decoding — treat it as
+  // absent everywhere the render decides "is this decoded?".
+  const apiDecoded = isApiFallbackSentinel(transaction.dataDecoded) ? null : transaction.dataDecoded;
   const hasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
-  const undecodable = hasCalldata && !hasCustomDecoding && !transaction.dataDecoded;
+  const undecodable = hasCalldata && !hasCustomDecoding && !apiDecoded;
   const effectiveViewMode = undecodable ? 'raw' : viewMode;
 
   return (
@@ -815,8 +825,10 @@ export default function TransactionAnalysis() {
                 </div>
               )}
 
-              {/* Safe API Decoded Data (if no custom decoder) */}
-              {!hasCustomDecoding && transaction.dataDecoded && (
+              {/* Safe API Decoded Data (if no custom decoder). apiDecoded is
+                  null for the "fallback" sentinel, so those route to the
+                  undecodable block above instead of rendering here. */}
+              {!hasCustomDecoding && apiDecoded && (
                 <div className="space-y-4">
                   <div
                     className={`rounded-lg p-4 border ${
@@ -828,7 +840,7 @@ export default function TransactionAnalysis() {
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-blue-900">Method: {transaction.dataDecoded.method}</p>
+                      <p className="font-semibold text-blue-900">Method: {apiDecoded.method}</p>
                       {apiDecodedVerification?.status === 'mismatch' && (
                         <span className="text-xs font-semibold px-2 py-0.5 rounded bg-red-100 text-red-800">
                           ⚠ Mismatch
@@ -851,11 +863,11 @@ export default function TransactionAnalysis() {
                     )}
                   </div>
 
-                  {transaction.dataDecoded.parameters.length > 0 && (
+                  {apiDecoded.parameters.length > 0 && (
                     <div>
                       <p className="font-semibold mb-3">Parameters:</p>
                       <div className="space-y-3">
-                        {transaction.dataDecoded.parameters.map((param, i) => (
+                        {apiDecoded.parameters.map((param, i) => (
                           <div key={i} className="bg-gray-50 rounded-lg p-4">
                             <div className="flex items-start justify-between mb-2">
                               <span className="font-semibold">{param.name}</span>
