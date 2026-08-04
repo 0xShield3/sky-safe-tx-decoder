@@ -48,6 +48,11 @@ export interface NetworkConfig {
   safePrefix: string
   /** Etherscan base URL */
   etherscanUrl: string
+  /**
+   * Public JSON-RPC endpoint. Used only to read a proxy's EIP-1967
+   * implementation slot when resolving a Sourcify ABI for a proxied call.
+   */
+  rpcUrl: string
 }
 
 /**
