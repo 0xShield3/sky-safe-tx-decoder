@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import type { Hex } from 'viem';
 import { StUsdsRateSetterDecoder } from './stusds-rate-setter.js';
 
-const ADDRESS = '0x30784615252B13e1DBe2bdF598627eaC297bF4c5';
+const ADDRESS = '0x30784615252B13E1DbE2bDf598627eaC297Bf4C5';
 
 /** set(strBps=625, dutyBps=700, line=500,000,000 RAD, cap=500,000,000e18) */
 const SET_CALLDATA: Hex =

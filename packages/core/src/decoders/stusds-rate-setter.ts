@@ -1,7 +1,7 @@
 /**
  * Custom decoder for Sky Protocol StUsdsRateSetter
  *
- * Contract: 0x30784615252B13e1DBe2bdF598627eaC297bF4c5 (Ethereum mainnet)
+ * Contract: 0x30784615252B13E1DbE2bDf598627eaC297Bf4C5 (Ethereum mainnet)
  *
  * Why this decoder exists: the Safe Transaction Service has no record of this
  * contract at all (GET /api/v1/contracts/<address>/ returns 404), so its API
@@ -44,7 +44,7 @@ const STUSDS_RATE_SETTER_ABI = parseAbi([
  * StUsdsRateSetter contract decoder
  */
 export class StUsdsRateSetterDecoder implements CustomDecoder {
-  readonly contractAddress: Address = '0x30784615252B13e1DBe2bdF598627eaC297bF4c5'
+  readonly contractAddress: Address = '0x30784615252B13E1DbE2bDf598627eaC297Bf4C5'
   readonly contractName = 'StUsdsRateSetter'
   readonly network = 'ethereum'
 

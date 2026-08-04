@@ -20,7 +20,7 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
-    address: '0x30784615252B13e1DBe2bdF598627eaC297bF4c5',
+    address: '0x30784615252B13E1DbE2bDf598627eaC297Bf4C5',
     label: 'StUsdsRateSetter',
     description: 'Sky stUSDS rate setter — sets the stUSDS savings rate, ilk duty, debt ceiling, and supply cap within governance-configured bounds',
     category: 'protocol',
