@@ -20,6 +20,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     apiUrl: `${BASE_URL}/eth`,
     safePrefix: 'eth',
     etherscanUrl: 'https://etherscan.io',
+    rpcUrl: 'https://ethereum-rpc.publicnode.com',
   },
   sepolia: {
     name: 'sepolia',
@@ -27,6 +28,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     apiUrl: `${BASE_URL}/sep`,
     safePrefix: 'sep',
     etherscanUrl: 'https://sepolia.etherscan.io',
+    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
   },
   base: {
     name: 'base',
@@ -34,6 +36,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
     apiUrl: `${BASE_URL}/base`,
     safePrefix: 'base',
     etherscanUrl: 'https://basescan.org',
+    rpcUrl: 'https://base-rpc.publicnode.com',
   },
   // Can add more networks as needed:
   // arbitrum: { name: 'arbitrum', chainId: 42161, apiUrl: `${BASE_URL}/arb1`, safePrefix: 'arb1', etherscanUrl: 'https://arbiscan.io' },

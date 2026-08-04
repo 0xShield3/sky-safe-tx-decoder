@@ -10,8 +10,8 @@ import {
   isMultiSend,
   verifyDecodedData,
   isApiFallbackSentinel,
-  fetchAbiFromSourcify,
-  decodeWithAbi,
+  decodeViaSourcify,
+  getNetwork,
   extractAddressesFromApiDecoded,
   extractAddressesFromDecodedTransaction,
   type SafeApiMultisigTransaction,
@@ -114,8 +114,21 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
           >
             Sourcify
           </span>
+          {result.implementation && (
+            <span
+              title="This target is a proxy. The call was decoded with its EIP-1967 implementation's ABI."
+              className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 cursor-help"
+            >
+              via implementation
+            </span>
+          )}
         </div>
         <p className="text-xs font-mono text-blue-700 mt-1">{result.signature}</p>
+        {result.implementation && (
+          <p className="text-xs text-gray-600 mt-1">
+            Proxy → implementation <span className="font-mono break-all">{result.implementation}</span>
+          </p>
+        )}
       </div>
       <DecodedParamList parameters={result.parameters} />
     </div>
@@ -402,14 +415,28 @@ export default function TransactionAnalysis() {
     const controller = new AbortController();
     let cancelled = false;
 
+    // Public RPC for this network — used only to read a proxy's EIP-1967
+    // implementation slot when the call target's own ABI does not decode.
+    const rpcUrl = (() => {
+      try {
+        return getNetwork(network).rpcUrl;
+      } catch {
+        return undefined;
+      }
+    })();
+
     (async () => {
       setSourcifyLoading(true);
       try {
         await Promise.all(
           targets.map(async (target) => {
-            const abi = await fetchAbiFromSourcify(chainId, target.to, controller.signal);
-            if (!abi || cancelled) return;
-            const decoded = decodeWithAbi(abi, target.data as `0x${string}`);
+            const decoded = await decodeViaSourcify({
+              chainId,
+              to: target.to,
+              data: target.data as `0x${string}`,
+              rpcUrl,
+              signal: controller.signal,
+            });
             if (!decoded || cancelled) return;
             if (target.key === 'top') {
               setSourcifyTop(decoded);
