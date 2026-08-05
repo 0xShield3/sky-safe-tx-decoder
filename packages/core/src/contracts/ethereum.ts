@@ -14,6 +14,18 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
+    address: '0x36B072ed8AFE665E3Aa6DaBa79Decbec63752b22',
+    label: 'SPBEAM',
+    description: 'Sky Protocol Bounded External Access Module — sets stability fees and the savings rate within governance-configured bounds',
+    category: 'protocol',
+  },
+  {
+    address: '0x30784615252B13E1DbE2bDf598627eaC297Bf4C5',
+    label: 'StUsdsRateSetter',
+    description: 'Sky stUSDS rate setter — sets the stUSDS savings rate, ilk duty, debt ceiling, and supply cap within governance-configured bounds',
+    category: 'protocol',
+  },
+  {
     address: '0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB',
     label: 'MCD_Pause_proxy',
     description: 'Sky governance pause proxy — executes passed governance spells',
