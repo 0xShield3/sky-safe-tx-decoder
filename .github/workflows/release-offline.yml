@@ -62,11 +62,16 @@ jobs:
         with:
           subject-path: ${{ env.ASSET }}
 
-      - name: Create release and upload
+      - name: Create draft release and upload
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Draft, not published: the tag builds and attaches the artifact, but
+          # a maintainer reviews the notes and clicks Publish. --generate-notes
+          # seeds the body with the merged-PR list; replace it with the curated
+          # release notes before publishing.
           gh release create "$GITHUB_REF_NAME" \
             "$ASSET" "$ASSET.sha256" \
             --title "$GITHUB_REF_NAME" \
+            --draft \
             --generate-notes
