@@ -6,6 +6,7 @@ import {
   getSafeUrl,
   getEtherscanAddressUrl,
 } from '@shield3/sky-safe-core';
+import { isApiFallbackSentinel } from '@shield3/sky-safe-core';
 import { Address } from '../components/Address';
 import { WeiValue } from '../components/WeiValue';
 import { conciseTimeline } from '../components/TransactionLog';
@@ -202,12 +203,20 @@ export default function SafeTransactions() {
                     <div>
                       <span className="text-gray-600">Value:</span> <WeiValue value={tx.value} />
                     </div>
-                    {tx.dataDecoded && (
-                      <div>
-                        <span className="text-gray-600">Method:</span>{' '}
-                        <span className="font-semibold">{tx.dataDecoded.method}</span>
-                      </div>
-                    )}
+                    {tx.dataDecoded &&
+                      (isApiFallbackSentinel(tx.dataDecoded) ? (
+                        // The Safe API's "fallback" is its "could not decode"
+                        // sentinel, not a real method — do not show it as one.
+                        <div>
+                          <span className="text-gray-600">Method:</span>{' '}
+                          <span className="text-gray-500 italic">unable to decode</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <span className="text-gray-600">Method:</span>{' '}
+                          <span className="font-semibold">{tx.dataDecoded.method}</span>
+                        </div>
+                      ))}
                     <div>
                       <span className="text-gray-600">Confirmations:</span> {tx.confirmations.length}/
                       {tx.confirmationsRequired}

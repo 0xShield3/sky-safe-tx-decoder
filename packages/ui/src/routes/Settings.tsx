@@ -251,8 +251,10 @@ export default function Settings() {
             <span className="font-semibold">Sourcify ABI fallback</span>
             <span className="block text-gray-600 mt-1">
               When the Safe Transaction Service returns no decoded data for a call, fetch the contract's verified ABI
-              from Sourcify and decode with it. The result is always re-encoded and byte-compared against the raw
-              calldata before it is shown — the same check applied to Safe API decodings.
+              from Sourcify and decode with it — following an EIP-1967 proxy to its implementation when needed. If the
+              contract is verified on a block explorer (e.g. Etherscan) but not yet on Sourcify, this asks Sourcify to
+              import it. The result is always re-encoded and byte-compared against the raw calldata before it is shown —
+              the same check applied to Safe API decodings.
             </span>
             <span className="block text-amber-700 mt-1">
               On by default. It sends the contract address to sourcify.dev, revealing which contract — and so which

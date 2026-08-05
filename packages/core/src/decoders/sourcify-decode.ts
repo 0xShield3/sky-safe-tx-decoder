@@ -11,8 +11,48 @@
 
 import type { Abi, AbiFunction, Address, Hex } from 'viem';
 import { decodeFunctionData, encodeFunctionData, toFunctionSelector, toFunctionSignature } from 'viem';
-import { fetchAbiFromSourcify } from '../api/sourcify-client.js';
+import { fetchAbiFromSourcify, requestEtherscanImport } from '../api/sourcify-client.js';
 import { resolveProxyImplementation } from '../api/proxy.js';
+
+const IMPORT_POLL_ATTEMPTS = 6;
+const IMPORT_POLL_INTERVAL_MS = 1500;
+
+const delay = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(t);
+      reject(new Error('aborted'));
+    });
+  });
+
+/**
+ * Get a contract's ABI from Sourcify, importing it from a block explorer first
+ * if Sourcify does not already have it.
+ *
+ * Many contracts (and proxy implementations) are verified on Etherscan but not
+ * mirrored to Sourcify. On a miss this asks Sourcify to import from Etherscan,
+ * then polls briefly for the result. No Etherscan key is needed here, and the
+ * decoded call is still re-encode-verified downstream.
+ */
+async function getAbiImporting(chainId: number, address: string, signal?: AbortSignal): Promise<Abi | null> {
+  const existing = await fetchAbiFromSourcify(chainId, address, signal);
+  if (existing) return existing;
+
+  const requested = await requestEtherscanImport(chainId, address, signal);
+  if (!requested) return null;
+
+  for (let i = 0; i < IMPORT_POLL_ATTEMPTS; i++) {
+    try {
+      await delay(IMPORT_POLL_INTERVAL_MS, signal);
+    } catch {
+      return null; // aborted
+    }
+    const abi = await fetchAbiFromSourcify(chainId, address, signal);
+    if (abi) return abi;
+  }
+  return null;
+}
 
 export interface SourcifyDecodedParam {
   name: string;
@@ -136,8 +176,9 @@ export async function decodeViaSourcify(opts: {
 }): Promise<SourcifyDecodeResult | null> {
   const { chainId, to, data, rpcUrl, signal } = opts;
 
-  // 1. Direct: the call target's own verified ABI.
-  const directAbi = await fetchAbiFromSourcify(chainId, to, signal);
+  // 1. Direct: the call target's own verified ABI (importing from Etherscan if
+  //    Sourcify does not already have it).
+  const directAbi = await getAbiImporting(chainId, to, signal);
   if (directAbi) {
     const direct = decodeWithAbi(directAbi, data);
     // A non-null result means the selector matched this ABI — use it (even a
@@ -149,7 +190,7 @@ export async function decodeViaSourcify(opts: {
   if (rpcUrl) {
     const implementation = await resolveProxyImplementation(rpcUrl, to, signal);
     if (implementation) {
-      const implAbi = await fetchAbiFromSourcify(chainId, implementation, signal);
+      const implAbi = await getAbiImporting(chainId, implementation, signal);
       if (implAbi) {
         const viaImpl = decodeWithAbi(implAbi, data);
         if (viaImpl) return { ...viaImpl, implementation };

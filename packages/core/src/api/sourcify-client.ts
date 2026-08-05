@@ -24,6 +24,35 @@ import type { Abi } from 'viem';
 const SOURCIFY_API = 'https://sourcify.dev/server';
 
 /**
+ * Ask Sourcify to import a contract's verified source from a block explorer
+ * (Etherscan and friends) and verify it. Many contracts are verified on
+ * Etherscan but not mirrored to Sourcify; this triggers Sourcify to fetch and
+ * verify from Etherscan on its own — no Etherscan API key is needed on this
+ * side, and the verification is still bytecode-checked by Sourcify.
+ *
+ * Returns true when Sourcify accepted the request (verification runs
+ * asynchronously — poll {@link fetchAbiFromSourcify} afterwards). Never throws.
+ */
+export async function requestEtherscanImport(chainId: number, address: string, signal?: AbortSignal): Promise<boolean> {
+  const endpoint = `${SOURCIFY_API}/v2/verify/etherscan/${chainId}/${address}`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      signal,
+    });
+    // 200/202 with a verificationId means accepted; a 409 "already verified"
+    // is also fine — either way the ABI will be fetchable.
+    if (response.ok) return true;
+    if (response.status === 409) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Fetch the verified ABI for a contract from Sourcify.
  *
  * @param chainId - EVM chain id (1 for Ethereum mainnet)
