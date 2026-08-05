@@ -30,6 +30,7 @@ import { Address } from '../components/Address';
 import { ParamValue } from '../components/ParamValue';
 import { WeiValue } from '../components/WeiValue';
 import { HashHex } from '../components/HashHex';
+import { TransactionLog } from '../components/TransactionLog';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
 import { useSettings } from '../settings/SettingsContext';
@@ -1185,6 +1186,12 @@ export default function TransactionAnalysis() {
             </span>
           </div>
         )}
+
+        {/* Lifecycle timeline: proposed → signed → rejected/executed. */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <p className="text-gray-600 text-sm font-medium mb-2">Timeline</p>
+          <TransactionLog transaction={transaction} allTransactions={allTransactions} safeAddress={address as string} />
+        </div>
       </div>
 
       {/* STEP 3: Hash Verification - Compare to your hardware wallet */}
