@@ -16,7 +16,7 @@
 
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { Outlet, useParams } from 'react-router-dom';
-import { getNetwork, loadNetworkContracts } from '@shield3/sky-safe-core';
+import { getNetwork, loadNetworkContracts, toChecksumAddress } from '@shield3/sky-safe-core';
 
 export interface SafeRouteValue {
   network: string;
@@ -29,7 +29,14 @@ const SafeRouteContext = createContext<SafeRouteValue | null>(null);
 export function SafeRouteProvider({ children }: { children?: ReactNode }) {
   const params = useParams<{ network: string; address: string }>();
   const network = params.network!;
-  const safeAddress = params.address! as `0x${string}`;
+  // Canonicalise the address to its EIP-55 checksum. The Safe Transaction
+  // Service requires a checksummed address in its URL and rejects any other
+  // casing with HTTP 422 — a lower-case or mis-cased paste otherwise surfaces
+  // as "failed to load". toChecksumAddress corrects any valid-hex casing
+  // without throwing; a value that is not an address at all is passed through
+  // unchanged so the child route can surface it.
+  const rawAddress = params.address!;
+  const safeAddress = (toChecksumAddress(rawAddress) ?? rawAddress) as `0x${string}`;
 
   // Swap the per-network built-in contract registry whenever the network
   // changes. Centralizes a call that previously had to be made manually
