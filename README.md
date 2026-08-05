@@ -43,7 +43,7 @@ sky-safe verify --address 0x... --nonce 520
 ### Web UI
 
 - Cloudflare Pages: [sky-safe-tx-decoder.pages.dev](https://sky-safe-tx-decoder.pages.dev/)
-- IPFS: [sky-safe-tx-decoder](https://bafybeiavucfkhjjunfozcaetvhvaeibicb3iaoizbwqzkjzssvg4d7tat4.ipfs.dweb.link/)
+- IPFS: [sky-safe-tx-decoder](https://bafybeicf5qkrydd7iawpxfhv2y5wv3bs6i3kjcaz6xsapu3jcvrg5oautm.ipfs.dweb.link/)
 
 Or run locally:
 
