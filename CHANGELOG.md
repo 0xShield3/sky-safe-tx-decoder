@@ -60,12 +60,4 @@ transaction lifecycle timeline, and hardening of the decoded-data verification.
   LockstakeEngine, USDS, and others), which were previously never applied.
 - Corrected the checksum of a pinned contract address.
 
-### Security
-
-- The decoded-data verifier no longer builds its ABI by concatenating
-  API-supplied parameter names and types into one string. Names and types from
-  the Safe API are untrusted; each type is parsed independently and must yield
-  exactly one parameter, so a decoding cannot claim fewer parameters than the
-  call actually encodes.
-
 [0.3.0]: https://github.com/0xShield3/sky-safe-tx-decoder/releases/tag/v0.3.0
