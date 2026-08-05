@@ -28,7 +28,7 @@ Based on [pcaversaccio/safe-tx-hashes-util](https://github.com/pcaversaccio/safe
 > recommended verification flow (build from source) for high-assurance use.
 
 ```bash
-npx @shield3/sky-safe-cli@0.2.0 verify \
+npx @shield3/sky-safe-cli@0.3.0 verify \
   --address 0xf65475e74C1Ed6d004d5240b06E3088724dFDA5d \
   --nonce 520
 ```
@@ -36,7 +36,7 @@ npx @shield3/sky-safe-cli@0.2.0 verify \
 Or install globally with a pinned version:
 
 ```bash
-npm install -g @shield3/sky-safe-cli@0.2.0
+npm install -g @shield3/sky-safe-cli@0.3.0
 sky-safe verify --address 0x... --nonce 520
 ```
 

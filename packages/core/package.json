@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Core Safe transaction hash calculation and decoding logic",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,7 +11,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -20,7 +22,14 @@
     "clean": "rm -rf dist *.tsbuildinfo",
     "prepublishOnly": "pnpm run build && pnpm run test"
   },
-  "keywords": ["safe", "gnosis-safe", "multisig", "eip-712", "hash-calculation", "transaction-decoder"],
+  "keywords": [
+    "safe",
+    "gnosis-safe",
+    "multisig",
+    "eip-712",
+    "hash-calculation",
+    "transaction-decoder"
+  ],
   "license": "AGPL-3.0-only",
   "author": "Security Alliance",
   "repository": {
