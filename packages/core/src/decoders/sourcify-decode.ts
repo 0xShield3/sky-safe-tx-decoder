@@ -75,6 +75,12 @@ export interface SourcifyDecodeResult {
    * implementation's ABI. Holds the implementation address, for provenance.
    */
   implementation?: Address;
+  /**
+   * Set only when the implementation was reached through an EIP-1967 beacon.
+   * Holds the beacon address, so the provenance names every contract trusted
+   * to produce this ABI.
+   */
+  beacon?: Address;
 }
 
 /**
@@ -156,8 +162,9 @@ function findFunction(abi: Abi, name: string, selector: Hex): AbiFunction | unde
  * This is the full Sourcify fallback: most verified DeFi contracts (Aave,
  * Compound, many others) are proxies whose own ABI is just a handful of
  * admin/upgrade functions, so decoding a call to the proxy requires the
- * implementation's ABI. The implementation address is read from the EIP-1967
- * slot via `rpcUrl`; if that is omitted, only the direct ABI is tried.
+ * implementation's ABI. Both EIP-1967 layouts are followed — the implementation
+ * slot, and a beacon whose `implementation()` names the current one — via
+ * `rpcUrl`; if that is omitted, only the direct ABI is tried.
  *
  * The result is always re-encode-verified in `decodeWithAbi`, so following the
  * proxy does not weaken the guarantee that the displayed VALUES are the signed
@@ -186,14 +193,19 @@ export async function decodeViaSourcify(opts: {
     if (direct) return direct;
   }
 
-  // 2. Proxy: follow the EIP-1967 implementation and decode against its ABI.
+  // 2. Proxy: follow the EIP-1967 implementation — directly, or through a
+  //    beacon — and decode against its ABI.
   if (rpcUrl) {
-    const implementation = await resolveProxyImplementation(rpcUrl, to, signal);
-    if (implementation) {
-      const implAbi = await getAbiImporting(chainId, implementation, signal);
+    const proxy = await resolveProxyImplementation(rpcUrl, to, signal);
+    if (proxy) {
+      const implAbi = await getAbiImporting(chainId, proxy.implementation, signal);
       if (implAbi) {
         const viaImpl = decodeWithAbi(implAbi, data);
-        if (viaImpl) return { ...viaImpl, implementation };
+        if (viaImpl) {
+          return proxy.beacon
+            ? { ...viaImpl, implementation: proxy.implementation, beacon: proxy.beacon }
+            : { ...viaImpl, implementation: proxy.implementation };
+        }
       }
     }
   }

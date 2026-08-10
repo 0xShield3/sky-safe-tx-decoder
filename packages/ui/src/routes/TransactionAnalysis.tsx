@@ -121,17 +121,30 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
           </span>
           {result.implementation && (
             <span
-              title="This target is a proxy. The call was decoded with its EIP-1967 implementation's ABI."
+              title={
+                result.beacon
+                  ? "This target is a beacon proxy. Its beacon was asked for the current implementation, and the call was decoded with that implementation's ABI."
+                  : "This target is a proxy. The call was decoded with its EIP-1967 implementation's ABI."
+              }
               className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 cursor-help"
             >
-              via implementation
+              {result.beacon ? 'via beacon implementation' : 'via implementation'}
             </span>
           )}
         </div>
         <p className="text-xs font-mono text-blue-700 mt-1">{result.signature}</p>
         {result.implementation && (
           <p className="text-xs text-gray-600 mt-1">
-            Proxy → implementation <span className="font-mono break-all">{result.implementation}</span>
+            {result.beacon ? (
+              <>
+                Proxy → beacon <span className="font-mono break-all">{result.beacon}</span> → implementation{' '}
+                <span className="font-mono break-all">{result.implementation}</span>
+              </>
+            ) : (
+              <>
+                Proxy → implementation <span className="font-mono break-all">{result.implementation}</span>
+              </>
+            )}
           </p>
         )}
       </div>
@@ -420,8 +433,9 @@ export default function TransactionAnalysis() {
     const controller = new AbortController();
     let cancelled = false;
 
-    // Public RPC for this network — used only to read a proxy's EIP-1967
-    // implementation slot when the call target's own ABI does not decode.
+    // Public RPC for this network — used only to resolve a proxy's EIP-1967
+    // implementation (directly, or via its beacon) when the call target's own
+    // ABI does not decode.
     const rpcUrl = (() => {
       try {
         return getNetwork(network).rpcUrl;
