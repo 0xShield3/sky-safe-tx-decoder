@@ -440,6 +440,26 @@ export default function TransactionAnalysis() {
     setSecurity(analysis);
   }, [transaction, paramAddresses, addressBook, mySafes, address]);
 
+  // Is this call decoded, and by what? Computed once, here, because BOTH the
+  // Sourcify effect and the render below must agree on it.
+  //
+  // They previously each rebuilt the test from raw state and disagreed. An empty
+  // MultiSend (`multiSendTxs === []`, which `decodeMultiSend` returns for
+  // `multiSend("")`) made the effect's `!multiSendTxs` false — so it queued no
+  // lookup — while the render's `multiSendTxs.length > 0` was also false, so it
+  // called the call undecodable and waited for a lookup that was never queued.
+  // The result was a spinner that never resolved, in place of the amber block
+  // that says "verify the raw data against an independent source before
+  // signing". A signer was left waiting instead of warned. One expression, used
+  // by both, is what stops that recurring.
+  //
+  // The Safe API's "fallback" sentinel is not a usable decoding — treat it as
+  // absent everywhere the decision is made.
+  const apiDecoded = transaction && !isApiFallbackSentinel(transaction.dataDecoded) ? transaction.dataDecoded : null;
+  const hasCustomDecoding = Boolean(customDecoded || (multiSendTxs && multiSendTxs.length > 0));
+  const hasCalldata = Boolean(transaction?.data && transaction.data !== '0x' && transaction.data.length > 2);
+  const undecodable = hasCalldata && !hasCustomDecoding && !apiDecoded;
+
   // Sourcify fallback: for any call the Safe API could not decode and no custom
   // decoder covers, fetch the contract's verified ABI from Sourcify and decode
   // with it. Runs only when the setting is on. Kept separate from the fetch
@@ -460,11 +480,8 @@ export default function TransactionAnalysis() {
     type Target = { key: 'top' | number; to: string; data: string };
     const targets: Target[] = [];
 
-    const topHasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
-    // The "fallback" sentinel counts as undecoded, so Sourcify is attempted for it too.
-    const topApiDecoded = isApiFallbackSentinel(transaction.dataDecoded) ? null : transaction.dataDecoded;
-    const topUndecodable = topHasCalldata && !customDecoded && !multiSendTxs && !topApiDecoded;
-    if (topUndecodable && transaction.data) {
+    // The same `undecodable` the render uses — see the note above it.
+    if (undecodable && transaction.data) {
       targets.push({ key: 'top', to: transaction.to, data: transaction.data });
     }
 
@@ -529,7 +546,7 @@ export default function TransactionAnalysis() {
       cancelled = true;
       controller.abort();
     };
-  }, [transaction, customDecoded, multiSendTxs, sourcifyFallback, chainId]);
+  }, [transaction, undecodable, multiSendTxs, sourcifyFallback, chainId, network]);
 
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
@@ -561,16 +578,12 @@ export default function TransactionAnalysis() {
 
   const hashesMatch = hashes?.safeTxHash === transaction.safeTxHash;
   const hasRisks = security && security.overallRisk !== 'none';
-  const hasCustomDecoding = customDecoded || (multiSendTxs && multiSendTxs.length > 0);
-  // Nothing decoded this call: no custom decoder matched and the Safe API
-  // returned no dataDecoded (it has no ABI cached for the target contract).
-  // Say so plainly and show the raw bytes rather than rendering an empty
-  // "Decoded" pane that reads as "this transaction does nothing".
-  // The Safe API's "fallback" sentinel is not a usable decoding — treat it as
-  // absent everywhere the render decides "is this decoded?".
-  const apiDecoded = isApiFallbackSentinel(transaction.dataDecoded) ? null : transaction.dataDecoded;
-  const hasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
-  const undecodable = hasCalldata && !hasCustomDecoding && !apiDecoded;
+  // `apiDecoded`, `hasCustomDecoding`, `hasCalldata` and `undecodable` are
+  // computed above the Sourcify effect, which shares them. Nothing decoded this
+  // call means: no custom decoder matched and the Safe API returned no usable
+  // dataDecoded. Say so plainly and show the raw bytes rather than rendering an
+  // empty "Decoded" pane that reads as "this transaction does nothing".
+  //
   // Sourcify lookups still outstanding for this transaction. Computed during
   // render rather than read from a loading flag set inside the effect, so the
   // first paint already shows "checking" — the effect runs after paint, which is
