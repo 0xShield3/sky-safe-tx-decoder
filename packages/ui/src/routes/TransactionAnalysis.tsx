@@ -751,6 +751,33 @@ export default function TransactionAnalysis() {
 
           {effectiveViewMode === 'decoded' ? (
             <div className="space-y-6">
+              {/* Which contract is being called, ABOVE the decoding — the same
+                  order each nested MultiSend call uses.
+
+                  It reads as a header rather than a footnote because the target
+                  is what gives the decoding its meaning: "transfer 1" means
+                  nothing until you know 1 of what, and the amount's decimal
+                  scale is derived from this address. A signer who reads the
+                  parameters first has already formed a belief about the amount
+                  before learning which token it is denominated in. Two
+                  different orders between direct and batched calls also trains
+                  a habit that is wrong half the time. */}
+              <div className="pb-4 border-b space-y-3 text-sm">
+                <div>
+                  <span className="text-gray-600 font-medium">To Address:</span>
+                  <div className="text-xs mt-1 break-all">
+                    <Address address={transaction.to} />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Value:</span> <WeiValue value={transaction.value} />
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Operation:</span>{' '}
+                  {transaction.operation === 0 ? 'Call' : transaction.operation === 1 ? 'DelegateCall' : 'Unknown'}
+                </div>
+              </div>
+
               {/* Enhanced Custom Decoder */}
               {customDecoded && (
                 <div className="space-y-4">
@@ -1151,22 +1178,6 @@ export default function TransactionAnalysis() {
                 </div>
               )}
 
-              {/* Basic transaction info */}
-              <div className="border-t pt-4 space-y-3 text-sm">
-                <div>
-                  <span className="text-gray-600 font-medium">To Address:</span>
-                  <div className="text-xs mt-1 break-all">
-                    <Address address={transaction.to} />
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-600 font-medium">Value:</span> <WeiValue value={transaction.value} />
-                </div>
-                <div>
-                  <span className="text-gray-600 font-medium">Operation:</span>{' '}
-                  {transaction.operation === 0 ? 'Call' : transaction.operation === 1 ? 'DelegateCall' : 'Unknown'}
-                </div>
-              </div>
             </div>
           ) : (
             /* Raw View */
