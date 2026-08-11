@@ -95,6 +95,20 @@ function DecodedParamList({ parameters }: { parameters: Array<{ name: string; ty
  * reuse DecodedParamList. A result that did not re-encode to the raw calldata
  * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
  */
+/**
+ * Small inline activity indicator for a pending Sourcify lookup. Deliberately
+ * understated: it marks an answer as not-yet-known, and must not compete with
+ * the warning styling reserved for a real decoding problem.
+ */
+function Spinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-3 w-3 shrink-0 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"
+    />
+  );
+}
+
 function SourcifyDecodedView({
   result,
   chainId,
@@ -209,7 +223,24 @@ export default function TransactionAnalysis() {
   // Each is re-encode-verified in core before it reaches here.
   const [sourcifyTop, setSourcifyTop] = useState<SourcifyDecodeResult | null>(null);
   const [sourcifyNested, setSourcifyNested] = useState<Record<number, SourcifyDecodeResult>>({});
-  const [sourcifyLoading, setSourcifyLoading] = useState(false);
+  /**
+   * Which Sourcify lookups have finished, keyed by target ('top' or a nested
+   * MultiSend index) and scoped to one transaction.
+   *
+   * A target absent from `keys` has not produced an answer yet, so the UI shows
+   * "checking" instead of a verdict. This is deliberately not a single boolean:
+   * a global flag starts false, so the first paint claimed "Sourcify has no
+   * verified ABI for it either" before any lookup had run, and then flipped once
+   * a decoding arrived. A signer must never be shown a definitive
+   * "cannot be decoded" that is merely "not asked yet".
+   *
+   * `txKey` scopes the map to the transaction it was built for, so switching
+   * transactions cannot show the previous one's completions for a frame.
+   */
+  const [sourcifyDone, setSourcifyDone] = useState<{ txKey: string | null; keys: Record<string, boolean> }>({
+    txKey: null,
+    keys: {},
+  });
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Loading transaction...');
   const [error, setError] = useState<string | null>(null);
@@ -420,6 +451,7 @@ export default function TransactionAnalysis() {
     // disabled setting or a new transaction never shows a stale decoding.
     setSourcifyTop(null);
     setSourcifyNested({});
+    setSourcifyDone({ txKey: transaction?.safeTxHash ?? null, keys: {} });
 
     if (!sourcifyFallback || !transaction) return;
 
@@ -462,10 +494,9 @@ export default function TransactionAnalysis() {
     })();
 
     (async () => {
-      setSourcifyLoading(true);
-      try {
-        await Promise.all(
-          targets.map(async (target) => {
+      await Promise.all(
+        targets.map(async (target) => {
+          try {
             const decoded = await decodeViaSourcify({
               chainId,
               to: target.to,
@@ -473,17 +504,25 @@ export default function TransactionAnalysis() {
               rpcUrl,
               signal: controller.signal,
             });
-            if (!decoded || cancelled) return;
-            if (target.key === 'top') {
-              setSourcifyTop(decoded);
-            } else {
-              setSourcifyNested((prev) => ({ ...prev, [target.key as number]: decoded }));
+            if (cancelled) return;
+            if (decoded) {
+              if (target.key === 'top') {
+                setSourcifyTop(decoded);
+              } else {
+                setSourcifyNested((prev) => ({ ...prev, [target.key as number]: decoded }));
+              }
             }
-          })
-        );
-      } finally {
-        if (!cancelled) setSourcifyLoading(false);
-      }
+          } finally {
+            // Mark this target answered whether or not a decoding came back, so
+            // its "checking" state resolves to a verdict. Per target, not per
+            // batch: a MultiSend item that resolves early must not keep showing
+            // "checking" until the slowest sibling finishes.
+            if (!cancelled) {
+              setSourcifyDone((prev) => ({ ...prev, keys: { ...prev.keys, [String(target.key)]: true } }));
+            }
+          }
+        })
+      );
     })();
 
     return () => {
@@ -532,9 +571,19 @@ export default function TransactionAnalysis() {
   const apiDecoded = isApiFallbackSentinel(transaction.dataDecoded) ? null : transaction.dataDecoded;
   const hasCalldata = Boolean(transaction.data && transaction.data !== '0x' && transaction.data.length > 2);
   const undecodable = hasCalldata && !hasCustomDecoding && !apiDecoded;
+  // Sourcify lookups still outstanding for this transaction. Computed during
+  // render rather than read from a loading flag set inside the effect, so the
+  // first paint already shows "checking" — the effect runs after paint, which is
+  // what made a definitive "cannot be decoded" flash before the real answer.
+  const sourcifyDoneKeys = sourcifyDone.txKey === transaction.safeTxHash ? sourcifyDone.keys : {};
+  const sourcifyPendingTop = undecodable && !sourcifyTop && sourcifyFallback && !sourcifyDoneKeys['top'];
+  const isNestedSourcifyPending = (idx: number) =>
+    sourcifyFallback && !sourcifyNested[idx] && !sourcifyDoneKeys[String(idx)];
   // Force the raw view and disable the Decoded toggle only while nothing has
   // decoded the call. A Sourcify fallback result (verified in core) counts as a
   // decoding, so once it arrives the Decoded view becomes available again.
+  // This also holds while a lookup is pending, so the raw bytes stay on screen
+  // for the whole wait rather than the pane going empty.
   const showRawOnly = undecodable && !sourcifyTop;
   const effectiveViewMode = showRawOnly ? 'raw' : viewMode;
 
@@ -582,8 +631,11 @@ export default function TransactionAnalysis() {
                   : `⏳ Pending (${tx.confirmations?.length || 0}/${tx.confirmationsRequired})`;
                 const date = tx.submissionDate ? new Date(tx.submissionDate).toLocaleString() : 'Unknown';
                 return (
+                  // The full safeTxHash, never abbreviated: this selector is how
+                  // a signer tells competing transactions on the same nonce
+                  // apart, and lookalike hashes differ in the middle.
                   <option key={tx.safeTxHash} value={tx.safeTxHash}>
-                    [{idx + 1}] {status} | {date} | {tx.safeTxHash.slice(0, 10)}...
+                    [{idx + 1}] {status} | {date} | {tx.safeTxHash}
                   </option>
                 );
               })}
@@ -736,15 +788,30 @@ export default function TransactionAnalysis() {
             </div>
           )}
 
-          {undecodable && !sourcifyTop && (
+          {undecodable && !sourcifyTop && sourcifyPendingTop && (
+            <div className="mb-6 bg-slate-50 border border-slate-300 rounded-lg p-4" role="status" aria-live="polite">
+              <div className="flex items-center gap-2 mb-2">
+                <Spinner />
+                <p className="font-semibold text-slate-800">Checking Sourcify for a verified ABI…</p>
+              </div>
+              <p className="text-sm text-slate-700">
+                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Looking for one
+                verified against this contract&rsquo;s on-chain bytecode. The raw data below is already final and does
+                not depend on the result.
+              </p>
+              <p className="text-sm text-slate-700 mt-2">
+                Hash verification below is unaffected — it does not depend on decoding.
+              </p>
+            </div>
+          )}
+
+          {undecodable && !sourcifyTop && !sourcifyPendingTop && (
             <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
               <p className="font-semibold text-amber-900 mb-2">Unable to decode this transaction</p>
               <p className="text-sm text-amber-900">
                 The Safe API has no ABI for this contract, and no decoder in this tool covers it.
                 {sourcifyFallback
-                  ? sourcifyLoading
-                    ? ' Checking Sourcify for a verified ABI…'
-                    : ' Sourcify has no verified ABI for it either.'
+                  ? ' Sourcify has no verified ABI for it either.'
                   : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
                 Verify the raw data below against an independent source before signing.
               </p>
@@ -1038,24 +1105,42 @@ export default function TransactionAnalysis() {
                           {sourcifyNested[idx] ? (
                             <SourcifyDecodedView result={sourcifyNested[idx]!} chainId={chainId} to={item.tx.to} />
                           ) : item.tx.data && item.tx.data !== '0x' ? (
-                            <div className="bg-amber-50 rounded p-3 border border-amber-200">
-                              <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
-                              <p className="text-xs text-amber-800 mb-3">
-                                Neither the Safe API nor this tool could decode this call.
-                                {sourcifyFallback
-                                  ? sourcifyLoading
-                                    ? ' Checking Sourcify for a verified ABI…'
-                                    : ' Sourcify has no verified ABI for it either.'
-                                  : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
-                                Verify the raw calldata below against an independent source before signing.
-                              </p>
-                              <p className="text-xs font-semibold text-gray-700">Function selector:</p>
-                              <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">
-                                {item.tx.data.slice(0, 10)}
-                              </p>
-                              <p className="text-xs font-semibold text-gray-700">Calldata:</p>
-                              <p className="text-xs font-mono bg-white p-2 rounded border break-all">{item.tx.data}</p>
-                            </div>
+                            isNestedSourcifyPending(idx) ? (
+                              <div className="bg-slate-50 rounded p-3 border border-slate-300" role="status" aria-live="polite">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Spinner />
+                                  <p className="font-semibold text-slate-800">Checking Sourcify for a verified ABI…</p>
+                                </div>
+                                <p className="text-xs text-slate-700 mb-3">
+                                  Neither the Safe API nor this tool could decode this call. Looking for an ABI verified
+                                  against this contract&rsquo;s on-chain bytecode. The calldata below is already final
+                                  and does not depend on the result.
+                                </p>
+                                <p className="text-xs font-semibold text-gray-700">Function selector:</p>
+                                <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">
+                                  {item.tx.data.slice(0, 10)}
+                                </p>
+                                <p className="text-xs font-semibold text-gray-700">Calldata:</p>
+                                <p className="text-xs font-mono bg-white p-2 rounded border break-all">{item.tx.data}</p>
+                              </div>
+                            ) : (
+                              <div className="bg-amber-50 rounded p-3 border border-amber-200">
+                                <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
+                                <p className="text-xs text-amber-800 mb-3">
+                                  Neither the Safe API nor this tool could decode this call.
+                                  {sourcifyFallback
+                                    ? ' Sourcify has no verified ABI for it either.'
+                                    : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
+                                  Verify the raw calldata below against an independent source before signing.
+                                </p>
+                                <p className="text-xs font-semibold text-gray-700">Function selector:</p>
+                                <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">
+                                  {item.tx.data.slice(0, 10)}
+                                </p>
+                                <p className="text-xs font-semibold text-gray-700">Calldata:</p>
+                                <p className="text-xs font-mono bg-white p-2 rounded border break-all">{item.tx.data}</p>
+                              </div>
+                            )
                           ) : (
                             <p className="text-xs text-gray-500">No calldata — this is a plain value/no-op call.</p>
                           )}
