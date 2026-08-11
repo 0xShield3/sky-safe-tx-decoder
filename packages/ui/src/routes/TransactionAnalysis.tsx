@@ -13,6 +13,7 @@ import {
   verifyDecodedData,
   isApiFallbackSentinel,
   decodeViaSourcify,
+  getSourcifyContractUrl,
   getNetwork,
   extractAddressesFromApiDecoded,
   extractAddressesFromDecodedTransaction,
@@ -94,7 +95,20 @@ function DecodedParamList({ parameters }: { parameters: Array<{ name: string; ty
  * reuse DecodedParamList. A result that did not re-encode to the raw calldata
  * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
  */
-function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
+function SourcifyDecodedView({
+  result,
+  chainId,
+  to,
+}: {
+  result: SourcifyDecodeResult;
+  chainId: number;
+  /** The call target. The ABI came from here unless a proxy was followed. */
+  to: string;
+}) {
+  // Link to the contract whose ABI produced this decoding — the implementation
+  // when a proxy was followed, otherwise the call target. Linking the proxy
+  // instead would point a signer at sources that do not contain this function.
+  const abiSource = result.implementation ?? to;
   if (!result.verified) {
     return (
       <div className="bg-red-50 border-2 border-red-400 rounded p-3">
@@ -113,12 +127,15 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
       <div className="bg-blue-50 rounded p-3 border border-blue-200">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="font-semibold text-blue-900">Method: {result.method}</p>
-          <span
-            title="ABI from Sourcify, verified against the contract's on-chain bytecode (not the Safe API). The decoded parameters re-encode to the exact bytes in this call."
-            className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 cursor-help"
+          <a
+            href={getSourcifyContractUrl(chainId, abiSource)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`ABI from Sourcify, verified against the contract's on-chain bytecode (not the Safe API). The decoded parameters re-encode to the exact bytes in this call. Opens the verified sources for ${abiSource} on Sourcify.`}
+            className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 underline decoration-dotted underline-offset-2 hover:bg-blue-200"
           >
-            Sourcify
-          </span>
+            Sourcify ↗
+          </a>
           {result.implementation && (
             <span
               title={
@@ -126,7 +143,7 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
                   ? "This target is a beacon proxy. Its beacon was asked for the current implementation, and the call was decoded with that implementation's ABI."
                   : "This target is a proxy. The call was decoded with its EIP-1967 implementation's ABI."
               }
-              className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 cursor-help"
+              className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800"
             >
               {result.beacon ? 'via beacon implementation' : 'via implementation'}
             </span>
@@ -715,7 +732,7 @@ export default function TransactionAnalysis() {
         <div className="p-6">
           {undecodable && sourcifyTop && (
             <div className="mb-6">
-              <SourcifyDecodedView result={sourcifyTop} />
+              <SourcifyDecodedView result={sourcifyTop} chainId={chainId} to={transaction.to} />
             </div>
           )}
 
@@ -1019,7 +1036,7 @@ export default function TransactionAnalysis() {
                       {!item.decoded && !item.apiDecoded && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
                           {sourcifyNested[idx] ? (
-                            <SourcifyDecodedView result={sourcifyNested[idx]!} />
+                            <SourcifyDecodedView result={sourcifyNested[idx]!} chainId={chainId} to={item.tx.to} />
                           ) : item.tx.data && item.tx.data !== '0x' ? (
                             <div className="bg-amber-50 rounded p-3 border border-amber-200">
                               <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>

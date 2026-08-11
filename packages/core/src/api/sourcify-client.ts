@@ -23,6 +23,20 @@ import type { Abi } from 'viem';
 
 const SOURCIFY_API = 'https://sourcify.dev/server';
 
+/** Human-readable Sourcify page for a verified contract, per chain. */
+const SOURCIFY_REPO = 'https://repo.sourcify.dev';
+
+/**
+ * URL of the Sourcify page showing a contract's verified sources.
+ *
+ * Given to a signer so the ABI used for a decoding can be inspected at its
+ * source rather than taken on trust. Chain-specific: an address not verified on
+ * that chain 404s rather than resolving to a same-address contract elsewhere.
+ */
+export function getSourcifyContractUrl(chainId: number, address: string): string {
+  return `${SOURCIFY_REPO}/${chainId}/${address}`;
+}
+
 /**
  * Ask Sourcify to import a contract's verified source from a block explorer
  * (Etherscan and friends) and verify it. Many contracts are verified on
