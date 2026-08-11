@@ -13,6 +13,111 @@ function getConfiguredSafeId(safe: AddressBookSafe): string {
   return `${safe.network}:${safe.address.toLowerCase()}`;
 }
 
+/**
+ * The protocol decoders registered in this app, as advertised on the home page.
+ *
+ * One entry per decoder registered in TransactionAnalysis. Keep this list and
+ * that registration in step — a decoder that runs but is not listed here leaves
+ * a signer unable to tell whether a contract is covered. The `functions` groups
+ * mirror the signatures each decoder's ABI declares.
+ */
+interface ProtocolDecoder {
+  name: string;
+  address: string;
+  summary: string;
+  /** Count shown in the disclosure heading — signatures, not names. */
+  signatureCount: number;
+  functions: Array<{ group: string; names: string }>;
+  /** Optional protocol documentation. Omitted where no page exists. */
+  docsUrl?: string;
+}
+
+const PROTOCOL_DECODERS: ProtocolDecoder[] = [
+  {
+    name: 'Sky Protocol — LockstakeEngine',
+    address: '0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3',
+    summary: 'Staking, borrowing, delegation and rewards operations on Ethereum mainnet.',
+    signatureCount: 13,
+    functions: [
+      { group: 'Urn management', names: 'open, hope, nope' },
+      { group: 'Deposit / withdraw', names: 'lock, free, freeNoFee' },
+      { group: 'Delegation / farming', names: 'selectVoteDelegate, selectFarm' },
+      { group: 'Borrow / repay', names: 'draw, wipe, wipeAll' },
+      { group: 'Rewards', names: 'getReward' },
+      { group: 'Batch operations', names: 'multicall (with recursive nested decoding)' },
+    ],
+    docsUrl: 'https://developers.sky.money/protocol/rewards/staking-engine/#deployments',
+  },
+  {
+    name: 'Sky Protocol — SPBEAM',
+    address: '0x36B072ed8AFE665E3Aa6DaBa79Decbec63752b22',
+    summary:
+      'Sky Protocol Bounded External Access Module. Sets stability fees and the savings rate within governance-configured bounds. The Safe Transaction Service does not decode this contract. Rate values show basis points and percentage; ilk identifiers show their ASCII label alongside the full bytes32.',
+    signatureCount: 7,
+    functions: [
+      { group: 'Rate updates', names: 'set (bulk, one entry per ilk)' },
+      { group: 'Configuration', names: 'file (global and per-ilk overloads)' },
+      { group: 'Authorisation (wards)', names: 'rely, deny' },
+      { group: 'Facilitator allowlist (buds)', names: 'kiss, diss' },
+    ],
+  },
+  {
+    name: 'Sky Protocol — StUsdsRateSetter',
+    address: '0x30784615252B13E1DbE2bDf598627eaC297Bf4C5',
+    summary:
+      'Sets the stUSDS savings rate, ilk duty, debt ceiling and supply cap within governance-configured bounds. The Safe Transaction Service holds no ABI for this contract at all.',
+    signatureCount: 7,
+    functions: [
+      { group: 'Rate / ceiling updates', names: 'set (strBps, dutyBps, line, cap)' },
+      { group: 'Configuration', names: 'file (global and per-id overloads)' },
+      { group: 'Authorisation (wards)', names: 'rely, deny' },
+      { group: 'Facilitator allowlist (buds)', names: 'kiss, diss' },
+    ],
+  },
+];
+
+function DecoderCard({ decoder }: { decoder: ProtocolDecoder }) {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <h4 className="font-semibold text-blue-900 mb-2">{decoder.name}</h4>
+      <p className="text-sm text-blue-800 mb-2">{decoder.summary}</p>
+      <p className="text-xs font-mono text-blue-700 mb-3 break-all">{decoder.address}</p>
+      <div className="flex gap-2 mb-3 flex-wrap">
+        <a
+          href={`https://etherscan.io/address/${decoder.address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
+        >
+          View on Etherscan ↗
+        </a>
+        {decoder.docsUrl && (
+          <a
+            href={decoder.docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
+          >
+            Protocol Docs ↗
+          </a>
+        )}
+      </div>
+      <details className="text-sm text-blue-800">
+        <summary className="cursor-pointer font-medium hover:text-blue-900">
+          Supported functions ({decoder.signatureCount} signatures)
+        </summary>
+        <ul className="mt-2 ml-4 space-y-1 list-disc">
+          {decoder.functions.map((f) => (
+            <li key={f.group}>
+              <strong>{f.group}:</strong> {f.names}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const { mySafes } = useAddressBook();
@@ -134,53 +239,10 @@ export default function Home() {
 
       <div className="mt-12 pt-8 border-t">
         <h3 className="text-lg font-semibold mb-4">Integrated Protocol Decoders</h3>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-semibold text-blue-900 mb-2">Sky Protocol - LockstakeEngine</h4>
-          <p className="text-sm text-blue-800 mb-2">
-            Enhanced decoding for Sky Protocol staking and rewards operations on Ethereum mainnet.
-          </p>
-          <p className="text-xs font-mono text-blue-700 mb-3 break-all">0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3</p>
-          <div className="flex gap-2 mb-3">
-            <a
-              href="https://etherscan.io/address/0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
-            >
-              View on Etherscan ↗
-            </a>
-            <a
-              href="https://developers.sky.money/protocol/rewards/staking-engine/#deployments"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 rounded hover:bg-blue-200 transition-colors"
-            >
-              Protocol Docs ↗
-            </a>
-          </div>
-          <details className="text-sm text-blue-800">
-            <summary className="cursor-pointer font-medium hover:text-blue-900">Supported Functions (13 total)</summary>
-            <ul className="mt-2 ml-4 space-y-1 list-disc">
-              <li>
-                <strong>Urn Management:</strong> open, hope, nope
-              </li>
-              <li>
-                <strong>Deposit/Withdraw:</strong> lock, free, freeNoFee
-              </li>
-              <li>
-                <strong>Delegation/Farming:</strong> selectVoteDelegate, selectFarm
-              </li>
-              <li>
-                <strong>Borrow/Repay:</strong> draw, wipe, wipeAll
-              </li>
-              <li>
-                <strong>Rewards:</strong> getReward
-              </li>
-              <li>
-                <strong>Batch Operations:</strong> multicall (with recursive nested decoding)
-              </li>
-            </ul>
-          </details>
+        <div className="space-y-4">
+          {PROTOCOL_DECODERS.map((decoder) => (
+            <DecoderCard key={decoder.address} decoder={decoder} />
+          ))}
         </div>
         <p className="text-sm text-gray-500 mt-4">More protocol decoders coming soon. Contributions welcome!</p>
       </div>
