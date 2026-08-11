@@ -11,10 +11,21 @@
  *
  * This is used ONLY as an explicit, opt-in fallback when the Safe Transaction
  * Service returns no decoded data. Whatever it returns is still re-encoded and
- * byte-compared against the raw calldata before anything is shown as decoded,
- * so a wrong ABI cannot cause wrong VALUES to be presented as verified. The
- * residual it cannot catch is a name-only relabel with identical types, which
- * requires compromising Sourcify or the transport.
+ * byte-compared against the raw calldata before anything is shown as decoded.
+ *
+ * Be precise about what that proves: the check pins the BYTES, not their
+ * interpretation. It proves the decoded call re-encodes to exactly the calldata
+ * being signed, selector included. It does not prove the ABI describes what the
+ * contract does. A hostile ABI can still change parameter names freely, and can
+ * change the function name and the argument types at the cost of a 4-byte
+ * selector collision (~2^32 hashes, cheap). Where the head encoding layout is
+ * unchanged, that last case alters the rendered value itself — declaring int256
+ * where the contract has uint256 renders 0xffff…ff9c as -100 rather than a
+ * number close to 2^256, with `verified` still true.
+ *
+ * So this raises the bar; it is not a proof of meaning. It is why the fallback
+ * is opt-in, why its provenance is labelled in the UI, and why a decoding is
+ * never a substitute for knowing what the contract does.
  *
  * @see https://docs.sourcify.dev/docs/api/
  */
