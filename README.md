@@ -302,15 +302,26 @@ Users must trust:
 - Hardware wallet secure screen
 
 When the [Sourcify fallback](#sourcify-fallback) is enabled, two further parties are
-trusted, and only for the **names** attached to a decoding:
+trusted for how a decoding is **labelled and rendered**:
 
-- **Sourcify**, for the ABI. Values cannot be faked, because a decoding must re-encode to
-  the signed bytes. What a hostile ABI could change is a parameter *name* — the same types
-  relabelled — so a decoding is never a substitute for knowing what the contract does.
-- **The public RPC**, for a proxy's implementation address. A wrong answer yields no
-  decoding or a visible mismatch, not wrong values.
+- **Sourcify**, for the ABI.
+- **The public RPC**, for a proxy's implementation address.
 
-Turning the fallback off in Settings removes both.
+The re-encode check pins the *bytes*, not their interpretation. It proves that the decoded
+call re-encodes to exactly the calldata being signed — selector included. It does not prove
+that the ABI describes what the contract does.
+
+What a hostile ABI can change:
+
+- **Parameter names**, freely. The names are not part of the selector.
+- **The function name and the argument types**, at the cost of a 4-byte selector collision.
+  Roughly 2^32 hashes, which is cheap. Where the head encoding layout is unchanged, this
+  alters the displayed value itself — declaring `int256` where the contract has `uint256`
+  renders the word `0xffff…ff9c` as `-100` rather than a number close to 2^256. The
+  decoding still re-encodes to the signed bytes and is still marked verified.
+
+A decoding is therefore never a substitute for knowing what the contract does. Turning the
+fallback off in Settings removes both parties.
 
 ## License
 
