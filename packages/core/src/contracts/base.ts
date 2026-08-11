@@ -12,12 +12,14 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'USDC',
     description: 'Circle USD stablecoin (native Base)',
     category: 'token',
+    decimals: 6,
   },
   {
     address: '0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA',
     label: 'USDbC',
     description: 'Bridged USD Coin (legacy)',
     category: 'token',
+    decimals: 6,
   },
 
   // Wrapped natives
@@ -26,5 +28,6 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'WETH',
     description: 'Wrapped Ether (Base)',
     category: 'token',
+    decimals: 18,
   },
 ]

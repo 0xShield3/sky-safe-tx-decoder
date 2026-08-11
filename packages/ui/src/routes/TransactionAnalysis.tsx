@@ -69,7 +69,14 @@ function buildSignature(method: string, parameters: Array<{ type: string }>): st
  * the Sourcify path — the rows are identical; only the provenance banner above
  * them differs. Values pass through toDisplayValue so bigints from viem render.
  */
-function DecodedParamList({ parameters }: { parameters: Array<{ name: string; type: string; value: unknown }> }) {
+function DecodedParamList({
+  parameters,
+  amountTarget,
+}: {
+  parameters: Array<{ name: string; type: string; value: unknown }>;
+  /** Call target and signature, so a token amount can preselect its scale. */
+  amountTarget?: { network: string; to: string; signature: string };
+}) {
   if (parameters.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -79,7 +86,11 @@ function DecodedParamList({ parameters }: { parameters: Array<{ name: string; ty
           <span className="font-semibold">{param.name}</span>
           <span className="text-gray-500"> ({param.type})</span>
           <div className="bg-white p-2 rounded border mt-1 break-all">
-            <ParamValue type={param.type} value={toDisplayValue(param.value)} />
+            <ParamValue
+              type={param.type}
+              value={toDisplayValue(param.value)}
+              amount={amountTarget ? { ...amountTarget, paramIndex: i } : undefined}
+            />
           </div>
         </div>
       ))}
@@ -94,7 +105,16 @@ function DecodedParamList({ parameters }: { parameters: Array<{ name: string; ty
  * reuse DecodedParamList. A result that did not re-encode to the raw calldata
  * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
  */
-function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
+function SourcifyDecodedView({
+  result,
+  network,
+  to,
+}: {
+  result: SourcifyDecodeResult;
+  network: string;
+  /** The call target — used only to preselect a known token's decimals. */
+  to: string;
+}) {
   if (!result.verified) {
     return (
       <div className="bg-red-50 border-2 border-red-400 rounded p-3">
@@ -135,7 +155,13 @@ function SourcifyDecodedView({ result }: { result: SourcifyDecodeResult }) {
           </p>
         )}
       </div>
-      <DecodedParamList parameters={result.parameters} />
+      {/* Always the call target, never the implementation: a token's identity
+          is the address a transfer is sent to. For a proxied token (USDC) the
+          proxy is the token; the implementation holds no balances. */}
+      <DecodedParamList
+        parameters={result.parameters}
+        amountTarget={{ network, to, signature: result.signature }}
+      />
     </div>
   );
 }
@@ -701,7 +727,7 @@ export default function TransactionAnalysis() {
         <div className="p-6">
           {undecodable && sourcifyTop && (
             <div className="mb-6">
-              <SourcifyDecodedView result={sourcifyTop} />
+              <SourcifyDecodedView result={sourcifyTop} network={network} to={transaction.to} />
             </div>
           )}
 
@@ -990,7 +1016,14 @@ export default function TransactionAnalysis() {
                               {buildSignature(item.apiDecoded.method, item.apiDecoded.parameters)}
                             </p>
                           </div>
-                          <DecodedParamList parameters={item.apiDecoded.parameters} />
+                          <DecodedParamList
+                            parameters={item.apiDecoded.parameters}
+                            amountTarget={{
+                              network,
+                              to: item.tx.to,
+                              signature: buildSignature(item.apiDecoded.method, item.apiDecoded.parameters),
+                            }}
+                          />
                         </div>
                       )}
 
@@ -1005,7 +1038,7 @@ export default function TransactionAnalysis() {
                       {!item.decoded && !item.apiDecoded && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
                           {sourcifyNested[idx] ? (
-                            <SourcifyDecodedView result={sourcifyNested[idx]!} />
+                            <SourcifyDecodedView result={sourcifyNested[idx]!} network={network} to={item.tx.to} />
                           ) : item.tx.data && item.tx.data !== '0x' ? (
                             <div className="bg-amber-50 rounded p-3 border border-amber-200">
                               <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
@@ -1087,7 +1120,16 @@ export default function TransactionAnalysis() {
                               <span className="text-xs text-gray-500 font-mono">{param.type}</span>
                             </div>
                             <div className="text-sm break-all bg-white p-3 rounded border">
-                              <ParamValue type={param.type} value={param.value} />
+                              <ParamValue
+                                type={param.type}
+                                value={param.value}
+                                amount={{
+                                  network,
+                                  to: transaction.to,
+                                  signature: buildSignature(apiDecoded.method, apiDecoded.parameters),
+                                  paramIndex: i,
+                                }}
+                              />
                             </div>
                           </div>
                         ))}
