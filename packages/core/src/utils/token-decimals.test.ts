@@ -65,15 +65,15 @@ describe('getAmountDecimalsHint', () => {
     expect(q({ paramIndex: 0, paramType: 'address' })).toBeNull();
   });
 
-  it('hints only the amount position of transferFrom', () => {
-    const sig = 'transferFrom(address,address,uint256)';
-    expect(q({ signature: sig, paramIndex: 2 })).toBe(18);
-    expect(q({ signature: sig, paramIndex: 0, paramType: 'address' })).toBeNull();
-    expect(q({ signature: sig, paramIndex: 1, paramType: 'address' })).toBeNull();
+  it('hints for approve and the allowance adjusters', () => {
+    expect(q({ signature: 'approve(address,uint256)' })).toBe(18);
+    expect(q({ signature: 'increaseAllowance(address,uint256)' })).toBe(18);
+    expect(q({ signature: 'decreaseAllowance(address,uint256)' })).toBe(18);
   });
 
-  it('hints for approve', () => {
-    expect(q({ signature: 'approve(address,uint256)' })).toBe(18);
+  it('does not hint for transferFrom — deliberately outside the allowlist', () => {
+    const sig = 'transferFrom(address,address,uint256)';
+    expect(q({ signature: sig, paramIndex: 2 })).toBeNull();
   });
 
   it('does not hint for a function outside the allowlist', () => {
@@ -139,22 +139,32 @@ describe('token registry integrity', () => {
   });
 });
 
-describe('ERC-4626 asset-denominated entry points are excluded', () => {
+describe('no ERC-4626 vault function preselects a scale', () => {
+  // sUSDS is a registry token AND a vault, so it is the case where a vault
+  // function could pick up a hint if the allowlist let it. None may.
+  //
+  // The denominator differs per function — deposit/withdraw are in the
+  // underlying asset, mint/redeem are in shares — and the registry records only
+  // the vault's own decimals. Correct today for sUSDS over USDS (both 18),
+  // wrong for an 18-decimal vault over a 6-decimal asset, where 1 unit of the
+  // asset would render as 0.000000000001. The tool does not guess.
   const SUSDS = '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD';
   const hint = (signature: string, paramIndex: number) =>
     getAmountDecimalsHint({ network: 'ethereum', to: SUSDS, signature, paramIndex, paramType: 'uint256' });
 
-  it('hints share-denominated mint and redeem — shares use the vault’s own decimals', () => {
-    expect(hint('mint(uint256,address)', 0)).toBe(18);
-    expect(hint('redeem(uint256,address,address)', 0)).toBe(18);
-  });
-
-  it('does not hint deposit or withdraw — those amounts are in the UNDERLYING asset', () => {
-    // The call is addressed to the vault, so the registry would supply the
-    // vault's decimals. That is only right while vault and asset agree. An
-    // 18-decimal vault over a 6-decimal asset would render 1 unit of the asset
-    // as 0.000000000001.
+  it('does not hint asset-denominated deposit or withdraw', () => {
     expect(hint('deposit(uint256,address)', 0)).toBeNull();
     expect(hint('withdraw(uint256,address,address)', 0)).toBeNull();
+  });
+
+  it('does not hint share-denominated mint or redeem', () => {
+    expect(hint('mint(uint256,address)', 0)).toBeNull();
+    expect(hint('redeem(uint256,address,address)', 0)).toBeNull();
+  });
+
+  it('still hints a plain ERC-20 transfer on the same contract', () => {
+    // The vault is a token too. Excluding vault functions must not exclude the
+    // ERC-20 surface it also exposes.
+    expect(hint('transfer(address,uint256)', 1)).toBe(18);
   });
 });

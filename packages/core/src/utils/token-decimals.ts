@@ -29,34 +29,43 @@
 import { CONTRACTS_BY_NETWORK } from '../contracts/index.js'
 
 /**
- * Standard ERC-20 functions whose amount parameter is denominated in the
- * token's own decimals, and the index of that parameter.
+ * The only functions that preselect a scale, and the index of the amount in
+ * each. Kept as small as it can usefully be, on purpose.
  *
- * Positional rather than by name: parameter names come from an ABI, and an ABI
- * from a third party is exactly the thing this tool declines to trust for
- * anything but presentation. The position of the amount in these signatures is
+ * Every entry here satisfies one rule: **the contract being called is itself
+ * the sole denominator of the amount.** A `transfer` or `approve` addressed to
+ * USDS moves USDS, in USDS decimals, and there is no second token in the call
+ * whose decimals might have been meant instead.
+ *
+ * Deliberately excluded, and why:
+ *
+ * - **ERC-4626 vault functions** (`deposit`, `withdraw`, `mint`, `redeem`).
+ *   Their amounts are denominated in either the vault's shares or the
+ *   underlying asset depending on which function it is, and the call is
+ *   addressed to the vault either way. Getting that split right is a judgement
+ *   about a second contract's decimals, made from a table that only records the
+ *   first. Correct today for sUSDS over USDS because both are 18, wrong the
+ *   moment a vault sits over an asset with different decimals. Supporting them
+ *   needs an explicit asset-decimals field, not an inference from the target.
+ * - **`transferFrom`.** Correct when it fires — it only fires on a direct call
+ *   to a registry token, since the hint keys off the call target — but it
+ *   offers nothing `transfer` does not, and a narrower surface is worth more
+ *   than saving a signer one click.
+ * - **Anything on a router, aggregator, or protocol contract.** Those amounts
+ *   are denominated in tokens named in the call's parameters, not in the
+ *   contract being called. The call-target gate excludes them already; nothing
+ *   should ever be added here that reintroduces them.
+ *
+ * Matching is positional, never by parameter name: names come from an ABI, and
+ * a third-party ABI is exactly what this tool declines to trust for anything
+ * beyond presentation. The position of the amount in these four signatures is
  * fixed by the ERC-20 standard.
  */
 const ERC20_AMOUNT_PARAM: Record<string, number> = {
   'transfer(address,uint256)': 1,
-  'transferFrom(address,address,uint256)': 2,
   'approve(address,uint256)': 1,
   'increaseAllowance(address,uint256)': 1,
   'decreaseAllowance(address,uint256)': 1,
-  // ERC-4626, SHARE-denominated entry points only. `mint` and `redeem` take
-  // shares, which are denominated in the vault's own decimals — the same
-  // contract this call is addressed to, so the registry value is the right one.
-  //
-  // `deposit(assets, receiver)` and `withdraw(assets, receiver, owner)` are
-  // deliberately absent. They are denominated in the UNDERLYING ASSET's
-  // decimals, not the vault's, and the call is addressed to the vault. Scaling
-  // them by the vault's decimals is correct only while the two happen to agree
-  // — true for sUSDS over USDS (both 18), false the moment a vault has 18
-  // decimals over a 6-decimal asset, where 1 USDC would render as
-  // 0.000000000001. Supporting them needs an explicit asset-decimals field, not
-  // a guess from the target.
-  'mint(uint256,address)': 0,
-  'redeem(uint256,address,address)': 0,
 }
 
 /** True for unsigned integer Solidity types. */
