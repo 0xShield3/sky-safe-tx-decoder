@@ -43,10 +43,19 @@ const ERC20_AMOUNT_PARAM: Record<string, number> = {
   'approve(address,uint256)': 1,
   'increaseAllowance(address,uint256)': 1,
   'decreaseAllowance(address,uint256)': 1,
-  // ERC-4626 vault entry points, denominated in the vault's own decimals.
-  'deposit(uint256,address)': 0,
+  // ERC-4626, SHARE-denominated entry points only. `mint` and `redeem` take
+  // shares, which are denominated in the vault's own decimals — the same
+  // contract this call is addressed to, so the registry value is the right one.
+  //
+  // `deposit(assets, receiver)` and `withdraw(assets, receiver, owner)` are
+  // deliberately absent. They are denominated in the UNDERLYING ASSET's
+  // decimals, not the vault's, and the call is addressed to the vault. Scaling
+  // them by the vault's decimals is correct only while the two happen to agree
+  // — true for sUSDS over USDS (both 18), false the moment a vault has 18
+  // decimals over a 6-decimal asset, where 1 USDC would render as
+  // 0.000000000001. Supporting them needs an explicit asset-decimals field, not
+  // a guess from the target.
   'mint(uint256,address)': 0,
-  'withdraw(uint256,address,address)': 0,
   'redeem(uint256,address,address)': 0,
 }
 

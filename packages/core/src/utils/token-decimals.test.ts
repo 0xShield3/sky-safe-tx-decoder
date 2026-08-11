@@ -138,3 +138,23 @@ describe('token registry integrity', () => {
     }
   });
 });
+
+describe('ERC-4626 asset-denominated entry points are excluded', () => {
+  const SUSDS = '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD';
+  const hint = (signature: string, paramIndex: number) =>
+    getAmountDecimalsHint({ network: 'ethereum', to: SUSDS, signature, paramIndex, paramType: 'uint256' });
+
+  it('hints share-denominated mint and redeem — shares use the vault’s own decimals', () => {
+    expect(hint('mint(uint256,address)', 0)).toBe(18);
+    expect(hint('redeem(uint256,address,address)', 0)).toBe(18);
+  });
+
+  it('does not hint deposit or withdraw — those amounts are in the UNDERLYING asset', () => {
+    // The call is addressed to the vault, so the registry would supply the
+    // vault's decimals. That is only right while vault and asset agree. An
+    // 18-decimal vault over a 6-decimal asset would render 1 unit of the asset
+    // as 0.000000000001.
+    expect(hint('deposit(uint256,address)', 0)).toBeNull();
+    expect(hint('withdraw(uint256,address,address)', 0)).toBeNull();
+  });
+});

@@ -1016,13 +1016,21 @@ export default function TransactionAnalysis() {
                               {buildSignature(item.apiDecoded.method, item.apiDecoded.parameters)}
                             </p>
                           </div>
+                          {/* No preselected scale unless this decoding was
+                              proven against the raw bytes. A friendly "= 1,000
+                              USDS" next to a mismatched or unchecked decoding
+                              lends it credibility it has not earned. */}
                           <DecodedParamList
                             parameters={item.apiDecoded.parameters}
-                            amountTarget={{
-                              network,
-                              to: item.tx.to,
-                              signature: buildSignature(item.apiDecoded.method, item.apiDecoded.parameters),
-                            }}
+                            amountTarget={
+                              item.verification && item.verification.status !== 'verified'
+                                ? undefined
+                                : {
+                                    network,
+                                    to: item.tx.to,
+                                    signature: buildSignature(item.apiDecoded.method, item.apiDecoded.parameters),
+                                  }
+                            }
                           />
                         </div>
                       )}
@@ -1123,12 +1131,16 @@ export default function TransactionAnalysis() {
                               <ParamValue
                                 type={param.type}
                                 value={param.value}
-                                amount={{
-                                  network,
-                                  to: transaction.to,
-                                  signature: buildSignature(apiDecoded.method, apiDecoded.parameters),
-                                  paramIndex: i,
-                                }}
+                                amount={
+                                  apiDecodedVerification && apiDecodedVerification.status !== 'verified'
+                                    ? undefined
+                                    : {
+                                        network,
+                                        to: transaction.to,
+                                        signature: buildSignature(apiDecoded.method, apiDecoded.parameters),
+                                        paramIndex: i,
+                                      }
+                                }
                               />
                             </div>
                           </div>
