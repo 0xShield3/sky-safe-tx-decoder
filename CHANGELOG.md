@@ -2,6 +2,75 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.1] — 2026-08-12
+
+Beacon proxy support, wider decoder coverage on Sourcify, and a changed default
+for how token amounts are displayed.
+
+> **Read this before upgrading.** Despite the patch version, this release
+> **changes a default**. An ERC-20 amount that previously read `1000000` now
+> reads `1` by default on a call to a known token. The raw integer is still
+> shown, and it is still the value that matches the signed bytes — but the
+> figure your eye lands on has changed. See "Amount scale" below.
+
+### Added
+
+- **Beacon proxies are followed.** The Sourcify fallback resolved only the
+  EIP-1967 implementation slot. A beacon proxy leaves that slot empty and names
+  a beacon which reports the implementation, so calls to one showed as
+  undecodable even when the implementation was fully verified. Both layouts now
+  resolve, and the provenance line names every contract trusted to produce the
+  ABI — `Proxy → beacon 0x… → implementation 0x…`. Resolution is bounded to one
+  hop and cannot loop.
+- **The Sourcify badge links to the verified sources**, so the ABI behind a
+  decoding can be inspected rather than taken on trust. It points at the
+  implementation when a proxy was followed, since the proxy's sources do not
+  contain the decoded function.
+- **A pending state for calls awaiting a Sourcify answer.** Previously a call
+  showed the verdict "Sourcify has no verified ABI for it either" while the
+  lookup was still running. It now says it is still checking, per call, and the
+  selector and full calldata stay on screen throughout.
+- **All three protocol decoders are listed** on the home page and in the README.
+  SPBEAM and StUsdsRateSetter shipped in 0.3.0 without ever being advertised.
+- **The Sourcify fallback is documented**, including its trust assumptions.
+
+### Changed
+
+- **Amount scale.** On a call to a token in the built-in registry, the amount
+  picker now starts on that token's decimals instead of `raw`. It applies only
+  to `transfer`, `approve`, `increaseAllowance` and `decreaseAllowance`, only
+  when the call target *is* the token, and only to that function's amount
+  parameter matched by position. It never applies to a router or aggregator
+  call, to `transferFrom`, or to any ERC-4626 vault function. Decimals are
+  hardcoded and were each verified against the deployed contract's `decimals()`
+  and `symbol()`; they are never read from the chain, so no RPC can change the
+  number you read. The raw integer is unchanged and every scale remains
+  selectable.
+- **The call target is shown above the decoded parameters** on a direct call,
+  matching how nested MultiSend calls and the raw view already read. The target
+  is what gives an amount its meaning, so it now appears before the amount.
+- **Trust assumptions are stated more precisely.** The re-encode check pins the
+  bytes, not their interpretation. The previous wording implied a hostile ABI
+  could only relabel a parameter name; it can also change the displayed function
+  name and argument types at the cost of a cheap 4-byte selector collision,
+  which can change a rendered value. Documented in the README and in the source.
+
+### Fixed
+
+- **An undecodable call could show a spinner instead of a warning, forever.** A
+  transaction whose data is an empty `multiSend("")` left the tool waiting on a
+  Sourcify lookup it never started, so the block telling a signer to verify the
+  raw data against an independent source never appeared. Found by security
+  review before release.
+- **The competing-transaction selectors showed a truncated `safeTxHash`** — ten
+  characters and an ellipsis, in both the web UI and the CLI prompt. That
+  selector is how a signer tells two transactions on one nonce apart, and
+  lookalike hashes differ in the middle. Both now show the full hash.
+- **`sky-safe --version` reported `0.1.5`** regardless of the installed version.
+  It now reads the real version, so it cannot drift again.
+- **An unsupported `--network` pointed at `sky-safe networks`**, a command that
+  was never registered. The error now lists the supported networks.
+
 ## [0.3.0] — 2026-08-05
 
 New protocol decoders, a Sourcify decoding fallback with proxy resolution, a

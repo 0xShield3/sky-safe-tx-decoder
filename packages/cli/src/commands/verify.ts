@@ -14,6 +14,7 @@ import {
   createSafeApiClient,
   SafeApiError,
   isNetworkSupported,
+  getSupportedNetworks,
   loadNetworkContracts,
   decoderRegistry,
   LockstakeEngineDecoder,
@@ -73,7 +74,9 @@ export function createVerifyCommand(): Command {
         // Validate network
         if (!isNetworkSupported(options.network)) {
           console.error(chalk.red(`✗ Unsupported network: ${options.network}`));
-          console.error(chalk.dim('  Run `sky-safe networks` to see supported networks'));
+          // List them here rather than pointing at a `sky-safe networks`
+          // command, which this CLI has never registered.
+          console.error(chalk.dim(`  Supported networks: ${getSupportedNetworks().join(', ')}`));
           process.exit(1);
         }
 
@@ -144,7 +147,11 @@ export function createVerifyCommand(): Command {
                   : `⏳ Pending (${t.confirmations?.length || 0}/${t.confirmationsRequired} sigs)`;
 
                 return {
-                  name: `[${idx + 1}] ${status} | Submitted: ${submissionDate} | Hash: ${t.safeTxHash.slice(0, 10)}...`,
+                  // The full safeTxHash, never abbreviated. This prompt is how
+                  // an operator tells competing transactions on one nonce
+                  // apart, and lookalike hashes differ in the middle — exactly
+                  // the part an ellipsis removes.
+                  name: `[${idx + 1}] ${status} | Submitted: ${submissionDate}\n      ${t.safeTxHash}`,
                   value: idx,
                   short: `Transaction ${idx + 1}`,
                 };

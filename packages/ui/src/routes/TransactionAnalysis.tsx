@@ -100,13 +100,6 @@ function DecodedParamList({
 }
 
 /**
- * Render a decoding obtained from a Sourcify ABI. Only the provenance banner is
- * Sourcify-specific — the source of a decoding matters to a signer, so it is
- * shown explicitly and distinctly from a Safe API decoding. The parameter rows
- * reuse DecodedParamList. A result that did not re-encode to the raw calldata
- * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
- */
-/**
  * Small inline activity indicator for a pending Sourcify lookup. Deliberately
  * understated: it marks an answer as not-yet-known, and must not compete with
  * the warning styling reserved for a real decoding problem.
@@ -120,6 +113,13 @@ function Spinner() {
   );
 }
 
+/**
+ * Render a decoding obtained from a Sourcify ABI. Only the provenance banner is
+ * Sourcify-specific — the source of a decoding matters to a signer, so it is
+ * shown explicitly and distinctly from a Safe API decoding. The parameter rows
+ * reuse DecodedParamList. A result that did not re-encode to the raw calldata
+ * is shown as a hard DO-NOT-SIGN warning, never as a decoding.
+ */
 function SourcifyDecodedView({
   result,
   chainId,
