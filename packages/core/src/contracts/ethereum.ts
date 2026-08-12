@@ -56,18 +56,21 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'SKY',
     description: 'Sky governance token',
     category: 'token',
+    decimals: 18,
   },
   {
     address: '0xdC035D45d973E3EC169d2276DDab16f1e407384F',
     label: 'USDS',
     description: 'Sky USD stablecoin',
     category: 'token',
+    decimals: 18,
   },
   {
     address: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD',
     label: 'sUSDS',
     description: 'Sky Savings USDS (yield-bearing)',
     category: 'token',
+    decimals: 18,
   },
 
   // CoW Protocol
@@ -96,18 +99,21 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'USDC',
     description: 'Circle USD stablecoin',
     category: 'token',
+    decimals: 6,
   },
   {
     address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
     label: 'USDT',
     description: 'Tether USD stablecoin',
     category: 'token',
+    decimals: 6,
   },
   {
     address: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
     label: 'DAI',
     description: 'MakerDAO DAI stablecoin',
     category: 'token',
+    decimals: 18,
   },
 
   // Wrapped natives
@@ -116,6 +122,7 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'WETH',
     description: 'Wrapped Ether (WETH9)',
     category: 'token',
+    decimals: 18,
   },
 
   // Major LSTs
@@ -124,6 +131,7 @@ export const CONTRACTS: NetworkContract[] = [
     label: 'stETH',
     description: 'Lido Staked Ether',
     category: 'token',
+    decimals: 18,
   },
   {
     address: '0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0',

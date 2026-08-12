@@ -15,12 +15,34 @@
  */
 
 import { useState } from 'react';
-import { DECIMAL_PRESETS, formatUnitsLoose, isNumericSolidityType, toBigIntLoose } from '@shield3/sky-safe-core';
+import {
+  DECIMAL_PRESETS,
+  formatUnitsLoose,
+  getAmountDecimalsHint,
+  isNumericSolidityType,
+  toBigIntLoose,
+} from '@shield3/sky-safe-core';
 import { Address } from './Address';
+
+/**
+ * Enough context to decide whether this parameter is a token amount, and in
+ * which token's decimals. Omitted where the call target or signature is not
+ * known, in which case the picker starts on `raw` exactly as before.
+ */
+export interface AmountContext {
+  network: string;
+  /** The address this call is made to. */
+  to: string;
+  /** Canonical signature of the decoded function. */
+  signature: string;
+  /** Index of this parameter within the function's inputs. */
+  paramIndex: number;
+}
 
 interface ParamValueProps {
   type: string;
   value: unknown;
+  amount?: AmountContext;
 }
 
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
@@ -43,7 +65,7 @@ function tryParseAddressArray(raw: unknown): string[] | null {
   return null;
 }
 
-export function ParamValue({ type, value }: ParamValueProps) {
+export function ParamValue({ type, value, amount }: ParamValueProps) {
   const normalizedType = (type || '').toLowerCase();
 
   if (normalizedType === 'address' && typeof value === 'string' && ADDRESS_PATTERN.test(value.trim())) {
@@ -69,7 +91,18 @@ export function ParamValue({ type, value }: ParamValueProps) {
   }
 
   if (isNumericSolidityType(normalizedType)) {
-    return <UintValue value={value} />;
+    // A known token's decimals, when this parameter is that token's amount.
+    // Null for everything else, which leaves the picker on `raw`.
+    const hint = amount
+      ? getAmountDecimalsHint({
+          network: amount.network,
+          to: amount.to,
+          signature: amount.signature,
+          paramIndex: amount.paramIndex,
+          paramType: normalizedType,
+        })
+      : null;
+    return <UintValue value={value} defaultDecimals={hint} />;
   }
 
   const display = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
@@ -81,10 +114,18 @@ export function ParamValue({ type, value }: ParamValueProps) {
  * (the ground truth that matches the signed data) alongside a row of scale
  * chips. Choosing one renders an additional `= <scaled>` view; the raw value is
  * never replaced.
+ *
+ * `defaultDecimals` preselects a scale when the call is a known token's amount.
+ * It changes only which chip starts active — every chip, including `raw`,
+ * remains available, and the raw integer is rendered either way. When the
+ * preselected scale is not one of the presets it is offered as an extra chip so
+ * the selection is always visible and reversible.
  */
-function UintValue({ value }: { value: unknown }) {
+function UintValue({ value, defaultDecimals }: { value: unknown; defaultDecimals?: number | null }) {
   const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);
-  const [mode, setMode] = useState('raw'); // 'raw' | '<decimals>' | 'custom'
+  const [mode, setMode] = useState(
+    typeof defaultDecimals === 'number' ? String(defaultDecimals) : 'raw'
+  ); // 'raw' | '<decimals>' | 'custom'
   const [custom, setCustom] = useState('18');
 
   // If the value doesn't coerce to an integer, don't offer scaling — just show
@@ -107,6 +148,15 @@ function UintValue({ value }: { value: unknown }) {
     decimals = parseInt(mode, 10);
   }
 
+  // Offer the preselected scale as a chip when it is not already a preset, so
+  // the active selection is always visible and can be switched off.
+  const presets =
+    typeof defaultDecimals === 'number' && !DECIMAL_PRESETS.some((p) => p.decimals === defaultDecimals)
+      ? [...DECIMAL_PRESETS, { decimals: defaultDecimals, label: `1e${defaultDecimals}` }].sort(
+          (a, b) => a.decimals - b.decimals
+        )
+      : DECIMAL_PRESETS;
+
   let scaled: string | null = null;
   if (decimals !== null) {
     try {
@@ -122,11 +172,15 @@ function UintValue({ value }: { value: unknown }) {
 
       <span className="inline-flex flex-wrap items-center gap-1">
         <Chip label="raw" active={mode === 'raw'} onClick={() => setMode('raw')} />
-        {DECIMAL_PRESETS.map((p) => (
+        {presets.map((p) => (
           <Chip
             key={p.decimals}
             label={`1e${p.decimals}`}
-            title={p.label}
+            title={
+              p.decimals === defaultDecimals
+                ? `${p.label} — preselected because this call is to a known token with ${p.decimals} decimals. The raw value is unchanged.`
+                : p.label
+            }
             active={mode === String(p.decimals)}
             onClick={() => setMode(String(p.decimals))}
           />

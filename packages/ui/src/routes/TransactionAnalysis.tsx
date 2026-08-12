@@ -70,7 +70,14 @@ function buildSignature(method: string, parameters: Array<{ type: string }>): st
  * the Sourcify path — the rows are identical; only the provenance banner above
  * them differs. Values pass through toDisplayValue so bigints from viem render.
  */
-function DecodedParamList({ parameters }: { parameters: Array<{ name: string; type: string; value: unknown }> }) {
+function DecodedParamList({
+  parameters,
+  amountTarget,
+}: {
+  parameters: Array<{ name: string; type: string; value: unknown }>;
+  /** Call target and signature, so a token amount can preselect its scale. */
+  amountTarget?: { network: string; to: string; signature: string };
+}) {
   if (parameters.length === 0) return null;
   return (
     <div className="space-y-2">
@@ -80,7 +87,11 @@ function DecodedParamList({ parameters }: { parameters: Array<{ name: string; ty
           <span className="font-semibold">{param.name}</span>
           <span className="text-gray-500"> ({param.type})</span>
           <div className="bg-white p-2 rounded border mt-1 break-all">
-            <ParamValue type={param.type} value={toDisplayValue(param.value)} />
+            <ParamValue
+              type={param.type}
+              value={toDisplayValue(param.value)}
+              amount={amountTarget ? { ...amountTarget, paramIndex: i } : undefined}
+            />
           </div>
         </div>
       ))}
@@ -112,10 +123,14 @@ function Spinner() {
 function SourcifyDecodedView({
   result,
   chainId,
+  network,
   to,
 }: {
   result: SourcifyDecodeResult;
+  /** Chain id — for the Sourcify link, which is per-chain. */
   chainId: number;
+  /** Network name — for the token-decimals lookup, which is per-network. */
+  network: string;
   /** The call target. The ABI came from here unless a proxy was followed. */
   to: string;
 }) {
@@ -179,7 +194,13 @@ function SourcifyDecodedView({
           </p>
         )}
       </div>
-      <DecodedParamList parameters={result.parameters} />
+      {/* Always the call target, never the implementation: a token's identity
+          is the address a transfer is sent to. For a proxied token (USDC) the
+          proxy is the token; the implementation holds no balances. */}
+      <DecodedParamList
+        parameters={result.parameters}
+        amountTarget={{ network, to, signature: result.signature }}
+      />
     </div>
   );
 }
@@ -797,7 +818,12 @@ export default function TransactionAnalysis() {
         <div className="p-6">
           {undecodable && sourcifyTop && (
             <div className="mb-6">
-              <SourcifyDecodedView result={sourcifyTop} chainId={chainId} to={transaction.to} />
+              <SourcifyDecodedView
+                result={sourcifyTop}
+                chainId={chainId}
+                network={network}
+                to={transaction.to}
+              />
             </div>
           )}
 
@@ -836,6 +862,33 @@ export default function TransactionAnalysis() {
 
           {effectiveViewMode === 'decoded' ? (
             <div className="space-y-6">
+              {/* Which contract is being called, ABOVE the decoding — the same
+                  order each nested MultiSend call uses.
+
+                  It reads as a header rather than a footnote because the target
+                  is what gives the decoding its meaning: "transfer 1" means
+                  nothing until you know 1 of what, and the amount's decimal
+                  scale is derived from this address. A signer who reads the
+                  parameters first has already formed a belief about the amount
+                  before learning which token it is denominated in. Two
+                  different orders between direct and batched calls also trains
+                  a habit that is wrong half the time. */}
+              <div className="pb-4 border-b space-y-3 text-sm">
+                <div>
+                  <span className="text-gray-600 font-medium">To Address:</span>
+                  <div className="text-xs mt-1 break-all">
+                    <Address address={transaction.to} />
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Value:</span> <WeiValue value={transaction.value} />
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Operation:</span>{' '}
+                  {transaction.operation === 0 ? 'Call' : transaction.operation === 1 ? 'DelegateCall' : 'Unknown'}
+                </div>
+              </div>
+
               {/* Enhanced Custom Decoder */}
               {customDecoded && (
                 <div className="space-y-4">
@@ -1101,7 +1154,22 @@ export default function TransactionAnalysis() {
                               {buildSignature(item.apiDecoded.method, item.apiDecoded.parameters)}
                             </p>
                           </div>
-                          <DecodedParamList parameters={item.apiDecoded.parameters} />
+                          {/* No preselected scale unless this decoding was
+                              proven against the raw bytes. A friendly "= 1,000
+                              USDS" next to a mismatched or unchecked decoding
+                              lends it credibility it has not earned. */}
+                          <DecodedParamList
+                            parameters={item.apiDecoded.parameters}
+                            amountTarget={
+                              item.verification && item.verification.status !== 'verified'
+                                ? undefined
+                                : {
+                                    network,
+                                    to: item.tx.to,
+                                    signature: buildSignature(item.apiDecoded.method, item.apiDecoded.parameters),
+                                  }
+                            }
+                          />
                         </div>
                       )}
 
@@ -1116,7 +1184,12 @@ export default function TransactionAnalysis() {
                       {!item.decoded && !item.apiDecoded && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
                           {sourcifyNested[idx] ? (
-                            <SourcifyDecodedView result={sourcifyNested[idx]!} chainId={chainId} to={item.tx.to} />
+                            <SourcifyDecodedView
+                              result={sourcifyNested[idx]!}
+                              chainId={chainId}
+                              network={network}
+                              to={item.tx.to}
+                            />
                           ) : item.tx.data && item.tx.data !== '0x' ? (
                             isNestedSourcifyPending(idx) ? (
                               <div className="bg-slate-50 rounded p-3 border border-slate-300" role="status" aria-live="polite">
@@ -1216,7 +1289,20 @@ export default function TransactionAnalysis() {
                               <span className="text-xs text-gray-500 font-mono">{param.type}</span>
                             </div>
                             <div className="text-sm break-all bg-white p-3 rounded border">
-                              <ParamValue type={param.type} value={param.value} />
+                              <ParamValue
+                                type={param.type}
+                                value={param.value}
+                                amount={
+                                  apiDecodedVerification && apiDecodedVerification.status !== 'verified'
+                                    ? undefined
+                                    : {
+                                        network,
+                                        to: transaction.to,
+                                        signature: buildSignature(apiDecoded.method, apiDecoded.parameters),
+                                        paramIndex: i,
+                                      }
+                                }
+                              />
                             </div>
                           </div>
                         ))}
@@ -1226,22 +1312,6 @@ export default function TransactionAnalysis() {
                 </div>
               )}
 
-              {/* Basic transaction info */}
-              <div className="border-t pt-4 space-y-3 text-sm">
-                <div>
-                  <span className="text-gray-600 font-medium">To Address:</span>
-                  <div className="text-xs mt-1 break-all">
-                    <Address address={transaction.to} />
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-600 font-medium">Value:</span> <WeiValue value={transaction.value} />
-                </div>
-                <div>
-                  <span className="text-gray-600 font-medium">Operation:</span>{' '}
-                  {transaction.operation === 0 ? 'Call' : transaction.operation === 1 ? 'DelegateCall' : 'Unknown'}
-                </div>
-              </div>
             </div>
           ) : (
             /* Raw View */
