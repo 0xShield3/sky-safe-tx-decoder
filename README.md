@@ -13,7 +13,8 @@ Based on [pcaversaccio/safe-tx-hashes-util](https://github.com/pcaversaccio/safe
 3. Verifies the calculated hash matches the API-provided hash
 4. Re-encodes decoded parameters and compares with raw calldata
 5. Runs security analysis (delegate calls, gas token attacks, owner modifications)
-6. Displays results with protocol-specific decoding when available
+6. Displays results with protocol-specific decoding when available, falling back to a
+   verified ABI from Sourcify when nothing else decodes the call
 
 **Safe versions**: v0.1.0 through v1.5.0
 
@@ -218,14 +219,58 @@ sky-safe verify --file examples/multiple-issues.json
 
 ## Custom Decoders
 
-The decoder registry provides protocol-specific human-readable transaction explanations. Currently included:
+The decoder registry provides protocol-specific human-readable transaction explanations. A
+decoder is pinned to one contract address on one network — it never guesses an ABI from a
+selector lookup. Every decoding is re-encoded and byte-compared against the raw calldata
+before it is shown.
 
-| Protocol                     | Contract                                     | Functions                                           |
-| ---------------------------- | -------------------------------------------- | --------------------------------------------------- |
-| Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 (urn management, staking, borrowing, delegation) |
-| MultiSend                    | Standard Safe MultiSend                      | Batch transaction decoding                          |
+Currently included:
+
+| Protocol                     | Contract                                     | Signatures                                            |
+| ---------------------------- | -------------------------------------------- | ----------------------------------------------------- |
+| Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 — urn management, staking, borrowing, delegation, rewards, multicall |
+| Sky Protocol SPBEAM          | `0x36B072ed8AFE665E3Aa6DaBa79Decbec63752b22` | 7 — `set`, `file` (two overloads), `rely`, `deny`, `kiss`, `diss` |
+| Sky Protocol StUsdsRateSetter | `0x30784615252B13E1DbE2bDf598627eaC297Bf4C5` | 7 — `set`, `file` (two overloads), `rely`, `deny`, `kiss`, `diss` |
+| MultiSend                    | Standard Safe MultiSend                      | Batch transaction decoding                            |
+
+**SPBEAM** sets stability fees and the savings rate within governance-configured bounds.
+The Safe Transaction Service does not decode it. Rate values show basis points and
+percentage; ilk identifiers show their ASCII label alongside the full `bytes32`.
+
+**StUsdsRateSetter** sets the stUSDS savings rate, ilk duty, debt ceiling and supply cap
+within governance-configured bounds. The Safe Transaction Service holds no ABI for this
+contract at all.
+
+When no decoder covers a contract and the Safe Transaction Service returns nothing, the
+Sourcify fallback fetches the contract's verified ABI and decodes with that instead. See
+[Sourcify fallback](#sourcify-fallback) below.
 
 See the [core package README](packages/core/README.md#creating-a-custom-decoder) for how to add your own.
+
+## Sourcify Fallback
+
+Web UI only. When the Safe Transaction Service returns no decoded data and no built-in
+decoder covers the contract, the app fetches the contract's verified ABI from
+[Sourcify](https://sourcify.dev) and decodes with that.
+
+- Sourcify serves the ABI of source that has been verified against the contract's
+  **on-chain bytecode**. This is stronger than a selector database: it is not "someone
+  submitted a signature for these four bytes", it is "this is the ABI of the exact contract
+  deployed at this address".
+- **Proxies are followed.** EIP-1967 proxies are resolved to their implementation, so
+  proxied calls decode instead of showing as raw bytes. The implementation address is read
+  from chain state via a public RPC and is shown alongside the decoding.
+- **Contracts missing from Sourcify are imported.** On a miss, the app asks Sourcify to
+  import and verify the source from a block explorer, then retries. No Etherscan API key is
+  needed.
+- **The result is re-encode-verified**, exactly like a Safe API decoding. A decoding that
+  does not re-encode to the signed bytes is shown as a hard warning, never as a decoding.
+
+Controlled by a Settings toggle, **on by default**. The request to Sourcify reveals which
+contract — and so which transaction — is being inspected. A signer who does not want that
+egress can turn it off, and then no request is made.
+
+The CLI does not use this fallback ([#19](https://github.com/0xShield3/sky-safe-tx-decoder/issues/19)).
 
 ## Contributing
 
@@ -255,6 +300,28 @@ Users must trust:
 - [viem](https://viem.sh) cryptographic library
 - Safe Transaction Service API data — however, the tool independently re-encodes decoded parameters and verifies they match the raw calldata and EIP-712 hashes, so API-provided decoded data is not blindly trusted
 - Hardware wallet secure screen
+
+When the [Sourcify fallback](#sourcify-fallback) is enabled, two further parties are
+trusted for how a decoding is **labelled and rendered**:
+
+- **Sourcify**, for the ABI.
+- **The public RPC**, for a proxy's implementation address.
+
+The re-encode check pins the *bytes*, not their interpretation. It proves that the decoded
+call re-encodes to exactly the calldata being signed — selector included. It does not prove
+that the ABI describes what the contract does.
+
+What a hostile ABI can change:
+
+- **Parameter names**, freely. The names are not part of the selector.
+- **The function name and the argument types**, at the cost of a 4-byte selector collision.
+  Roughly 2^32 hashes, which is cheap. Where the head encoding layout is unchanged, this
+  alters the displayed value itself — declaring `int256` where the contract has `uint256`
+  renders the word `0xffff…ff9c` as `-100` rather than a number close to 2^256. The
+  decoding still re-encodes to the signed bytes and is still marked verified.
+
+A decoding is therefore never a substitute for knowing what the contract does. Turning the
+fallback off in Settings removes both parties.
 
 ## License
 

@@ -110,7 +110,18 @@ decoderRegistry.register(new YourProtocolDecoder())
 export * from './decoders/your-protocol.js'
 ```
 
-See `packages/core/src/decoders/lockstake-engine.ts` for a complete example with 13 functions, multicall support, and risk assessment.
+Worked examples:
+
+- `packages/core/src/decoders/lockstake-engine.ts` — 13 signatures, multicall support with
+  recursive nested decoding, and risk assessment.
+- `packages/core/src/decoders/spbeam.ts` — bulk rate updates, `bytes32` ilk identifiers
+  rendered with their ASCII label, and basis points rendered as a percentage.
+- `packages/core/src/decoders/stusds-rate-setter.ts` — a contract the Safe Transaction
+  Service holds no ABI for at all.
+
+Each re-encodes its decoding and byte-compares it against the raw calldata before
+returning, and each is pinned to one address on one network rather than matching on a
+selector.
 
 ## API Reference
 
