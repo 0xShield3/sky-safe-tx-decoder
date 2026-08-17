@@ -8,6 +8,7 @@ import {
   LockstakeEngineDecoder,
   SPBEAMDecoder,
   StUsdsRateSetterDecoder,
+  PASConfiguratorDecoder,
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
@@ -40,6 +41,7 @@ import { useSettings } from '../settings/SettingsContext';
 decoderRegistry.register(new LockstakeEngineDecoder());
 decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
+decoderRegistry.register(new PASConfiguratorDecoder());
 
 /**
  * Deep-convert bigints to strings so a decoded value can be rendered.

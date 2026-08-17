@@ -26,6 +26,27 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
+    address: '0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929',
+    label: 'PAS Configurator',
+    description:
+      'Sky PAS (Parallelized Allocation System) Configurator — the cBEAM entry point for moving a PAU rate limit within governance-set ceilings, and for running pre-staged controller actions',
+    category: 'protocol',
+  },
+  {
+    address: '0x1A1879E66547F90bfF87D45A5b0335950E019E02',
+    label: 'PAS BeamState',
+    description:
+      'Sky PAS BeamState — holds cBEAM pairings, the hop cooldown, the maxChange ceiling multiplier, governance-seeded rate-limit defaults, and the global stop flag the Configurator checks',
+    category: 'protocol',
+  },
+  {
+    address: '0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1',
+    label: 'Grove RateLimits',
+    description:
+      'RateLimits contract for the Grove PAU — the target of setRateLimit calls from the Grove cBEAM Safe',
+    category: 'protocol',
+  },
+  {
     address: '0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB',
     label: 'MCD_Pause_proxy',
     description: 'Sky governance pause proxy — executes passed governance spells',

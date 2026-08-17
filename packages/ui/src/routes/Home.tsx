@@ -74,6 +74,20 @@ const PROTOCOL_DECODERS: ProtocolDecoder[] = [
       { group: 'Facilitator allowlist (buds)', names: 'kiss, diss' },
     ],
   },
+  {
+    name: 'Sky Protocol — PAS Configurator',
+    address: '0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929',
+    summary:
+      'Parallelized Allocation System — the cBEAM entry point for moving a PAU rate limit without a spell. PAS rate-limit keys are keccak hashes, not ASCII, so a raw decoding shows 32 opaque bytes; this decoder resolves the key by recomputing its preimage, scales the amount by that key’s own denomination, and renders the per-second refill rate per day. type(uint256).max is labelled UNLIMITED instead of printed as 78 digits.',
+    signatureCount: 2,
+    functions: [
+      { group: 'Rate limits', names: 'setRateLimit (key resolved by keccak preimage)' },
+      {
+        group: 'Staged actions',
+        names: 'callControllerAction (shows keccak256(data), the key BeamState authorises on)',
+      },
+    ],
+  },
 ];
 
 function DecoderCard({ decoder }: { decoder: ProtocolDecoder }) {
