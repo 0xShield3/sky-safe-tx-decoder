@@ -242,36 +242,15 @@ percentage; ilk identifiers show their ASCII label alongside the full `bytes32`.
 within governance-configured bounds. The Safe Transaction Service holds no ABI for this
 contract at all.
 
-**PAS Configurator** is the cBEAM entry point of the Parallelized Allocation System — it
+**PAS Configurator** is the cBEAM entry point of the Parallelized Allocation System. It
 moves a Parallelized Allocation Unit's rate limits within governance-set ceilings without a
-spell. This decoder exists for meaning rather than for types: the Configurator is verified
-on Sourcify, so the fallback already decodes it correctly, but correct output here is still
-not actionable output. A raw `setRateLimit` shows a signer a 32-byte keccak hash where they
-need the name of a rate limit, a bare integer where they need an amount, a per-second refill
-rate where they need "X per day", and 78 digits of `type(uint256).max` where they need
-"UNLIMITED".
+spell. Rate-limit keys are keccak hashes rather than ASCII, so the decoder resolves them by
+recomputing the preimage; `maxAmount` and `slope` are scaled by the key's own denomination,
+which is not the target contract's; and `callControllerAction` surfaces `keccak256(data)`,
+the value BeamState authorises on.
 
-The decoder closes each of those:
-
-- **Keys are resolved by preimage, never by lookup.** A name is shown only after this code
-  recomputes `keccak256` of the candidate preimage and matches the calldata byte for byte,
-  including the `abi.encode` composition used for address-scoped and domain-scoped keys. A
-  key that does not match is reported as unresolved, with the full `bytes32` and an explicit
-  instruction to match it by hand — never a guess.
-- **Amounts are scaled by the key's own denomination**, which is not the same as the target
-  contract's. `LIMIT_USDE_MINT` is denominated in USDC, not USDe; `LIMIT_USDS_TO_USDC` is
-  USDC in both swap directions; `LIMIT_OTC_SWAP` is normalised to 18 decimals for every
-  asset. Keys whose scale follows a token the key is scoped to are shown as raw integers
-  with the scale stated as undetermined, rather than given a plausible-looking number.
-- **Direction is not claimed.** Whether a call raises or lowers a limit, and whether it sits
-  under the ceiling, depends on the limit's current on-chain value and is not in the
-  calldata. The decoder says so and names the reads that settle it.
-- **`callControllerAction` shows `keccak256(data)`** — the value BeamState actually
-  authorises on — and declines to decode the inner calldata, since no ABI for an arbitrary
-  controller is trustworthy here.
-
-The CLI has no Sourcify fallback, so there this decoder is the only path to any PAS decoding
-at all.
+See [`packages/core/src/decoders/PAS.md`](packages/core/src/decoders/PAS.md) for the key
+table, denominations, rendering rules, and scope.
 
 When no decoder covers a contract and the Safe Transaction Service returns nothing, the
 Sourcify fallback fetches the contract's verified ABI and decodes with that instead. See

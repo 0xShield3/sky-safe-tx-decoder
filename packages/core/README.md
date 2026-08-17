@@ -118,12 +118,10 @@ Worked examples:
   rendered with their ASCII label, and basis points rendered as a percentage.
 - `packages/core/src/decoders/stusds-rate-setter.ts` — a contract the Safe Transaction
   Service holds no ABI for at all.
-- `packages/core/src/decoders/pas-configurator.ts` — a contract that already decodes
-  correctly via Sourcify, decoded again for meaning. `bytes32` keys are keccak hashes rather
-  than ASCII, so they are resolved by recomputing the preimage (see
-  `pas-common.ts`); amounts are scaled by the key's own denomination rather than the target
-  contract's; and the decoder declines to state whether a call raises or lowers a limit,
-  because that depends on on-chain state the calldata does not carry.
+- `packages/core/src/decoders/pas-configurator.ts` — `bytes32` keys resolved by recomputing
+  the keccak preimage (see `pas-common.ts`), and amounts scaled by the key's own
+  denomination rather than the target contract's. Documented in
+  [`src/decoders/PAS.md`](src/decoders/PAS.md).
 
 Each re-encodes its decoding and byte-compares it against the raw calldata before
 returning, and each is pinned to one address on one network rather than matching on a

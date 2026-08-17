@@ -12,41 +12,23 @@ All notable changes to this project are documented here.
   source verified on Sourcify — exact match on creation and runtime bytecode,
   `src/Configurator.sol:Configurator`, solc 0.8.24+commit.e11b9ed9, not a proxy.
 
-  This decoder is not about types. The Configurator is verified, so the Sourcify
-  fallback already decodes it correctly in the web UI. It is about meaning:
+  - Rate-limit keys are resolved by recomputing the keccak preimage. An
+    unmatched key renders its full `bytes32` and is reported as unresolved.
+  - `maxAmount` and `slope` are scaled by the key's own denomination. Keys
+    scoped to an operand token are shown as raw integers with the scale stated
+    as undetermined.
+  - `slope` is rendered per day as well as per second.
+  - `type(uint256).max` renders as `UNLIMITED`.
+  - `callControllerAction` surfaces `keccak256(data)`, the value BeamState
+    authorises on. The inner calldata is not decoded.
 
-  - **Rate-limit keys are resolved by keccak preimage.** PAS keys are hashes,
-    not right-padded ASCII, so `bytes32ToLabel` returns `(not ASCII)` for every
-    one of them and a raw decoding gives a signer 32 opaque bytes. Names are
-    recomputed and byte-matched, including the `abi.encode` composition used for
-    address-, pair-, and domain-scoped keys. An unmatched key is reported as
-    unresolved with its full `bytes32` — never guessed.
-  - **Amounts are scaled by the key's denomination, not the target contract's.**
-    `LIMIT_USDE_MINT` is denominated in USDC rather than USDe, so reading it as
-    18 decimals misstates the amount by a factor of 10^12. Keys whose scale
-    follows a token they are scoped to are left as raw integers with the scale
-    stated as undetermined.
-  - **Per-second refill rates are rendered per day**, which is the figure a
-    signer can sanity-check.
-  - **`type(uint256).max` is labelled UNLIMITED** rather than printed as 78
-    digits, and re-pinning an unlimited key is flagged.
-  - **Direction is not claimed.** Whether a call raises or lowers a limit, and
-    whether it is within the ceiling, depends on the limit's current on-chain
-    value and is absent from the calldata. The decoder says so and names the
-    reads that settle it, rather than inferring a direction it cannot know.
-  - **`callControllerAction` shows `keccak256(data)`** — the value BeamState
-    authorises on — and declines to decode the inner calldata, since no ABI for
-    an arbitrary controller is trustworthy at this layer.
-
-  The CLI has no Sourcify fallback ([#19]), so there this is the only path to
-  any PAS decoding at all.
+  See `packages/core/src/decoders/PAS.md` for the key table, denominations, and
+  scope.
 
 - **PAS contracts added to the Ethereum registry** so they are labelled during
   review: PAS Configurator, PAS BeamState
   (`0x1A1879E66547F90bfF87D45A5b0335950E019E02`), and the Grove RateLimits
   contract (`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1`).
-
-[#19]: https://github.com/0xShield3/sky-safe-tx-decoder/issues/19
 
 ## [0.3.1] — 2026-08-12
 
