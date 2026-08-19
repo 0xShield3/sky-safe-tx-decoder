@@ -113,8 +113,17 @@ describe('trailingDataWarning', () => {
   it('should state the byte count and show the bytes in full', () => {
     const text = trailingDataWarning({ extraBytes: 8, trailing: '0x6a85e1e325afea44' });
 
-    expect(text).toContain('8 extra bytes');
+    expect(text).toContain('8 bytes');
     expect(text).toContain('0x6a85e1e325afea44');
+  });
+
+  it('should stay short enough for a signer to actually read', () => {
+    // The mechanism (ABI decoding, ERC-2771) is context, not an instruction.
+    // It belongs behind a disclosure in the UI, not in the warning line.
+    const text = trailingDataWarning({ extraBytes: 8, trailing: '0x6a85e1e325afea44' });
+
+    expect(text.length).toBeLessThan(260);
+    expect(text).not.toContain('ERC-2771');
   });
 
   it('should never say DO NOT SIGN', () => {
@@ -126,10 +135,10 @@ describe('trailingDataWarning', () => {
 
   it('should say the parameters shown are correct', () => {
     const text = trailingDataWarning({ extraBytes: 8, trailing: '0x6a85e1e325afea44' });
-    expect(text).toContain('parameters shown are correct');
+    expect(text).toContain('parameters are verified');
   });
 
   it('should use the singular for one byte', () => {
-    expect(trailingDataWarning({ extraBytes: 1, trailing: '0xff' })).toContain('1 extra byte of');
+    expect(trailingDataWarning({ extraBytes: 1, trailing: '0xff' })).toContain('1 byte after');
   });
 });

@@ -201,24 +201,33 @@ function SourcifyDecodedView({
           are correct is what teaches signers to ignore it. */}
       {result.status === 'trailing-data' && (
         <div className="bg-amber-50 border-2 border-amber-400 rounded p-3">
-          <p className="font-semibold text-amber-900 mb-1">
-            ⚠️ This call contains {result.trailingBytes} extra{' '}
-            {result.trailingBytes === 1 ? 'byte' : 'bytes'} of calldata
+          <p className="font-semibold text-amber-900">
+            ⚠️ Extra calldata — {result.trailingBytes}{' '}
+            {result.trailingBytes === 1 ? 'byte' : 'bytes'}
           </p>
-          <p className="text-xs text-amber-900">
-            The parameters below are correct — they re-encode to the start of this call exactly — but
-            they do not account for the bytes at the end of it.
-          </p>
+          <p className="font-mono text-xs text-amber-900 break-all mt-1">{result.trailingData}</p>
           <p className="text-xs text-amber-900 mt-2">
-            Most contracts ignore trailing calldata, because an ABI decoder checks that calldata is
-            long enough rather than exactly the right length. A contract that hashes its own
-            calldata, forwards <span className="font-mono">msg.data</span>, or reads the tail
-            deliberately (for example ERC-2771) does not ignore it. These bytes are covered by the
-            transaction hash you sign, so confirm they are expected for this contract.
+            Parameters below are verified. These bytes are not part of them, and they are included
+            in the hash you sign.
           </p>
-          <p className="text-xs text-amber-900 mt-2">
-            Extra bytes: <span className="font-mono break-all">{result.trailingData}</span>
+          <p className="text-xs font-semibold text-amber-900 mt-2">
+            Confirm they are expected for this contract.
           </p>
+          {/* The mechanism is context, not an instruction. A signer mid-review
+              needs the bytes and the action; the explanation is here for the
+              one time they want it. */}
+          <details className="mt-2">
+            <summary className="text-xs text-amber-900 cursor-pointer hover:underline">
+              Why this happens
+            </summary>
+            <p className="text-xs text-amber-900 mt-1">
+              Appending bytes to calldata is always permitted — an ABI decoder checks that calldata
+              is long enough for its parameters, not that it is exactly that length. SDKs use this
+              for attribution tags. Most contracts ignore the extra bytes, but one that hashes its
+              own calldata, forwards <span className="font-mono">msg.data</span>, or reads the tail
+              deliberately (ERC-2771) does not.
+            </p>
+          </details>
         </div>
       )}
       {/* Always the call target, never the implementation: a token's identity

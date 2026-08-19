@@ -127,7 +127,7 @@ describe('SPBEAMDecoder', () => {
       const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
       const warnings = result.main.warnings!.join(' ');
 
-      expect(warnings).toContain('4 extra bytes');
+      expect(warnings).toContain('4 bytes');
       expect(warnings).toContain('0xdeadbeef');
     });
 

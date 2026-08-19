@@ -90,13 +90,8 @@ export function classifyReencode(raw: Hex, reencoded: Hex): ReencodeVerdict {
 export function trailingDataWarning(verdict: { extraBytes: number; trailing: Hex }): string {
   const plural = verdict.extraBytes === 1 ? 'byte' : 'bytes'
   return (
-    `⚠️ This call contains ${verdict.extraBytes} extra ${plural} of calldata beyond the ` +
-    `decoded parameters. The parameters shown are correct — they re-encode to the start of ` +
-    `this call exactly — but they do not account for these bytes: ${verdict.trailing}. ` +
-    `Most contracts ignore trailing calldata, because an ABI decoder checks that calldata is ` +
-    `long enough rather than exactly the right length. A contract that hashes its own ` +
-    `calldata, forwards msg.data, or reads the tail deliberately (for example ERC-2771) does ` +
-    `not ignore it. These bytes are covered by the transaction hash you sign, so confirm ` +
-    `they are expected for this contract before signing.`
+    `⚠️ Extra calldata — ${verdict.extraBytes} ${plural} after the decoded parameters: ` +
+    `${verdict.trailing}. The parameters are verified; these bytes are not part of them, and ` +
+    `they are included in the hash you sign. Confirm they are expected for this contract.`
   )
 }
