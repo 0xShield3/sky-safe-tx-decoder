@@ -8,6 +8,7 @@
 
 import type { Abi, Hex } from 'viem'
 import { encodeFunctionData } from 'viem'
+import { classifyReencode, trailingDataWarning } from '../utils/reencode.js'
 
 /**
  * Render a right-padded ASCII bytes32 id as its text label.
@@ -56,19 +57,37 @@ export function radToWholeTokens(value: bigint): string {
 }
 
 /**
+ * Outcome of a decoder's re-encode self-check.
+ *
+ * `status` mirrors `ReencodeVerdict`, plus `unverifiable` for the case where
+ * re-encoding could not be run at all. Callers map it to a risk level:
+ * `mismatch` and `unverifiable` are hard failures, `trailing` is a warning that
+ * the parameters are right but do not cover every byte in the call.
+ */
+export interface ReencodeCheck {
+  status: 'exact' | 'trailing' | 'mismatch' | 'unverifiable'
+  warnings: string[]
+  /** Set only for `trailing` — the bytes past the end of the arguments. */
+  trailing?: Hex
+  /** Set only for `trailing` — how many bytes those are. */
+  extraBytes?: number
+}
+
+/**
  * Re-encode a decoded call and byte-compare it against the raw calldata.
  *
  * viem's decoder ignores bytes appended past the end of the encoded arguments,
  * so without this check a transaction carrying extra trailing calldata would
- * render as a clean, ordinary call. Returns warnings — empty when the bytes
- * round-trip exactly.
+ * render as a clean, ordinary call. Classification is delegated to
+ * `classifyReencode` so every surface in this tool agrees on what the bytes
+ * mean.
  */
 export function checkReencode(
   abi: Abi,
   functionName: string,
   args: readonly unknown[],
   data: Hex
-): string[] {
+): ReencodeCheck {
   let reencoded: Hex
   try {
     reencoded = encodeFunctionData({
@@ -77,21 +96,38 @@ export function checkReencode(
       args: args as never,
     })
   } catch (error) {
-    return [
-      `⚠️ Could not re-encode this call to confirm the decoding is faithful: ${
-        error instanceof Error ? error.message : String(error)
-      }. Verify the raw calldata by hand before signing.`,
-    ]
+    return {
+      status: 'unverifiable',
+      warnings: [
+        `⚠️ Could not re-encode this call to confirm the decoding is faithful: ${
+          error instanceof Error ? error.message : String(error)
+        }. Verify the raw calldata by hand before signing.`,
+      ],
+    }
   }
 
-  if (reencoded.toLowerCase() !== data.toLowerCase()) {
-    return [
-      '⚠️ DECODED DATA DOES NOT MATCH RAW CALLDATA. Re-encoding the decoded ' +
-        'parameters produced different bytes than the transaction contains, ' +
-        'which means the display below is not what you would be signing. ' +
-        `Re-encoded: ${reencoded} — Raw: ${data}. DO NOT SIGN.`,
-    ]
+  const verdict = classifyReencode(data, reencoded)
+
+  if (verdict.kind === 'trailing') {
+    return {
+      status: 'trailing',
+      warnings: [trailingDataWarning(verdict)],
+      trailing: verdict.trailing,
+      extraBytes: verdict.extraBytes,
+    }
   }
 
-  return []
+  if (verdict.kind === 'mismatch') {
+    return {
+      status: 'mismatch',
+      warnings: [
+        '⚠️ DECODED DATA DOES NOT MATCH RAW CALLDATA. Re-encoding the decoded ' +
+          'parameters produced different bytes than the transaction contains, ' +
+          'which means the display below is not what you would be signing. ' +
+          `Re-encoded: ${reencoded} — Raw: ${data}. DO NOT SIGN.`,
+      ],
+    }
+  }
+
+  return { status: 'exact', warnings: [] }
 }

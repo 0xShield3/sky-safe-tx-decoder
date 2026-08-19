@@ -138,7 +138,7 @@ function SourcifyDecodedView({
   // when a proxy was followed, otherwise the call target. Linking the proxy
   // instead would point a signer at sources that do not contain this function.
   const abiSource = result.implementation ?? to;
-  if (!result.verified) {
+  if (result.status === 'mismatch') {
     return (
       <div className="bg-red-50 border-2 border-red-400 rounded p-3">
         <p className="font-semibold text-red-900 mb-1">⚠️ Sourcify decoding did not match the raw calldata</p>
@@ -194,6 +194,33 @@ function SourcifyDecodedView({
           </p>
         )}
       </div>
+      {/* Trailing calldata. The parameters below re-encode to the start of this
+          call exactly, so they are shown normally — this is a warning about
+          bytes they do not cover, not a reason to distrust them. Amber, not
+          red: spending the red DO-NOT-SIGN banner on a call whose parameters
+          are correct is what teaches signers to ignore it. */}
+      {result.status === 'trailing-data' && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded p-3">
+          <p className="font-semibold text-amber-900 mb-1">
+            ⚠️ This call contains {result.trailingBytes} extra{' '}
+            {result.trailingBytes === 1 ? 'byte' : 'bytes'} of calldata
+          </p>
+          <p className="text-xs text-amber-900">
+            The parameters below are correct — they re-encode to the start of this call exactly — but
+            they do not account for the bytes at the end of it.
+          </p>
+          <p className="text-xs text-amber-900 mt-2">
+            Most contracts ignore trailing calldata, because an ABI decoder checks that calldata is
+            long enough rather than exactly the right length. A contract that hashes its own
+            calldata, forwards <span className="font-mono">msg.data</span>, or reads the tail
+            deliberately (for example ERC-2771) does not ignore it. These bytes are covered by the
+            transaction hash you sign, so confirm they are expected for this contract.
+          </p>
+          <p className="text-xs text-amber-900 mt-2">
+            Extra bytes: <span className="font-mono break-all">{result.trailingData}</span>
+          </p>
+        </div>
+      )}
       {/* Always the call target, never the implementation: a token's identity
           is the address a transfer is sent to. For a proxied token (USDC) the
           proxy is the token; the implementation holds no balances. */}

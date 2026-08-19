@@ -13,6 +13,7 @@ import type { Abi, AbiFunction, Address, Hex } from 'viem';
 import { decodeFunctionData, encodeFunctionData, toFunctionSelector, toFunctionSignature } from 'viem';
 import { fetchAbiFromSourcify, requestEtherscanImport } from '../api/sourcify-client.js';
 import { resolveProxyImplementation } from '../api/proxy.js';
+import { classifyReencode } from '../utils/reencode.js';
 
 const IMPORT_POLL_ATTEMPTS = 6;
 const IMPORT_POLL_INTERVAL_MS = 1500;
@@ -66,10 +67,23 @@ export interface SourcifyDecodeResult {
   /** Canonical signature, e.g. `withdrawV3(address,address,uint256)`. */
   signature: string;
   parameters: SourcifyDecodedParam[];
-  /** True only when the decoded call re-encodes to the raw calldata exactly. */
+  /**
+   * True only when the decoded call re-encodes to the raw calldata EXACTLY.
+   * Stays false for `trailing-data`, so callers gating on this boolean keep
+   * their existing conservative behaviour.
+   */
   verified: boolean;
+  /**
+   * Which re-encode outcome occurred. `trailing-data` means the parameters
+   * re-encode to the start of the call exactly, with bytes remaining after.
+   */
+  status: 'verified' | 'trailing-data' | 'mismatch';
   /** The re-encoded bytes, for display when they do NOT match. */
   reencoded: Hex;
+  /** Set only for `trailing-data` — the bytes past the end of the arguments. */
+  trailingData?: Hex;
+  /** Set only for `trailing-data` — how many bytes those are. */
+  trailingBytes?: number;
   /**
    * Set when the call target is a proxy and this decoding came from the
    * implementation's ABI. Holds the implementation address, for provenance.
@@ -124,12 +138,25 @@ export function decodeWithAbi(abi: Abi, data: Hex): SourcifyDecodeResult | null 
     value: args[i],
   }));
 
+  // `reencoded === '0x'` is the re-encode-failed sentinel above. classifyReencode
+  // rejects it as a prefix candidate, so it can only ever land on `mismatch`.
+  const verdict = classifyReencode(data, reencoded);
+
   return {
     method: functionName,
     signature: toFunctionSignature(fn),
     parameters,
-    verified: reencoded !== '0x' && reencoded.toLowerCase() === data.toLowerCase(),
+    verified: verdict.kind === 'exact',
+    status:
+      verdict.kind === 'exact'
+        ? 'verified'
+        : verdict.kind === 'trailing'
+          ? 'trailing-data'
+          : 'mismatch',
     reencoded,
+    ...(verdict.kind === 'trailing'
+      ? { trailingData: verdict.trailing, trailingBytes: verdict.extraBytes }
+      : {}),
   };
 }
 

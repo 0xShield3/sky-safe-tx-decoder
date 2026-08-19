@@ -125,19 +125,58 @@ describe('SPBEAMDecoder', () => {
     // without this check appended calldata would render as an ordinary call.
     it('should flag trailing calldata that the decoder would otherwise ignore', () => {
       const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
+      const warnings = result.main.warnings!.join(' ');
+
+      expect(warnings).toContain('4 extra bytes');
+      expect(warnings).toContain('0xdeadbeef');
+    });
+
+    it('should show the trailing bytes in full', () => {
+      const result = decoder.decode((SET_CALLDATA + 'cafebabedeadbeef') as Hex);
+
+      expect(result.main.warnings!.join(' ')).toContain('0xcafebabedeadbeef');
+    });
+
+    it('should not raise a decoder-verification failure for trailing bytes', () => {
+      // The parameters re-encode to the start of the call exactly, so they are
+      // correct. generalWarnings drives the red "decoder verification failed"
+      // banner, which would be false here.
+      const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
+
+      expect(result.generalWarnings).toBeUndefined();
+      expect(result.main.riskLevel).toBe('medium');
+      expect(result.main.warnings!.join(' ')).not.toContain('DO NOT SIGN');
+    });
+
+    it('should still decode the parameters correctly alongside trailing bytes', () => {
+      const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
+
+      expect(result.main.name).toBe('set');
+      expect(result.main.parameters).toHaveLength(9);
+      expect(result.main.parameters[0]!.name).toBe('updates[0] — ETH-A');
+    });
+
+    it('should still hard-fail a genuine parameter mismatch', () => {
+      // A non-canonical encoding: the array's head offset is moved from 0x20 to
+      // 0x40 and a padding word inserted. viem follows the offset and decodes
+      // the same nine updates, but re-encoding produces the canonical layout,
+      // so the bytes do not round-trip. This is the shape that makes a display
+      // disagree with what executes, and it must stay a stop-signing signal.
+      //
+      // Changing a value nibble would NOT do: that yields a different but
+      // perfectly canonical call, which re-encodes exactly and is not a
+      // mismatch at all.
+      const OFFSET_0X40 = '0000000000000000000000000000000000000000000000000000000000000040';
+      const PADDING_WORD = '0'.repeat(64);
+      const nonCanonical = ('0x474d857f' + OFFSET_0X40 + PADDING_WORD + SET_CALLDATA.slice(74)) as Hex;
+
+      const result = decoder.decode(nonCanonical);
 
       expect(result.main.riskLevel).toBe('high');
       expect(result.generalWarnings).toBeDefined();
       expect(result.generalWarnings!.join(' ')).toContain('DOES NOT MATCH RAW CALLDATA');
       expect(result.generalWarnings!.join(' ')).toContain('DO NOT SIGN');
-    });
-
-    it('should include both byte sequences in full in the mismatch warning', () => {
-      const tampered = (SET_CALLDATA + 'deadbeef') as Hex;
-      const warning = decoder.decode(tampered).generalWarnings!.join(' ');
-
-      expect(warning).toContain(tampered);
-      expect(warning).toContain(SET_CALLDATA);
+      expect(result.generalWarnings!.join(' ')).toContain(nonCanonical);
     });
   });
 

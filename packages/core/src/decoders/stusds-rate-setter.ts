@@ -62,16 +62,20 @@ export class StUsdsRateSetterDecoder implements CustomDecoder {
     const main = this.decodeFunction(functionName, decodedArgs)
 
     // Re-encode and byte-compare — viem's decoder ignores trailing calldata.
-    const reencodeWarnings = checkReencode(
-      STUSDS_RATE_SETTER_ABI,
-      functionName,
-      decodedArgs,
-      data
-    )
-    if (reencodeWarnings.length > 0) {
-      main.warnings = [...(main.warnings ?? []), ...reencodeWarnings]
+    const reencode = checkReencode(STUSDS_RATE_SETTER_ABI, functionName, decodedArgs, data)
+
+    // Trailing bytes leave the decoded parameters correct, so they are reported
+    // as a warning rather than a decoder-verification failure. See spbeam.ts.
+    if (reencode.status === 'trailing') {
+      main.warnings = [...(main.warnings ?? []), ...reencode.warnings]
+      if (main.riskLevel !== 'high') main.riskLevel = 'medium'
+      return { main, isMulticall: false }
+    }
+
+    if (reencode.status !== 'exact') {
+      main.warnings = [...(main.warnings ?? []), ...reencode.warnings]
       main.riskLevel = 'high'
-      return { main, isMulticall: false, generalWarnings: reencodeWarnings }
+      return { main, isMulticall: false, generalWarnings: reencode.warnings }
     }
 
     return { main, isMulticall: false }
