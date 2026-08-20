@@ -21,6 +21,7 @@ import {
   SPBEAMDecoder,
   StUsdsRateSetterDecoder,
   PASConfiguratorDecoder,
+  createPauAgentDecoders,
   calculateSafeTxHash,
   verifySafeTxHash,
   analyzeSecurity,
@@ -46,6 +47,9 @@ decoderRegistry.register(new LockstakeEngineDecoder());
 decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
 decoderRegistry.register(new PASConfiguratorDecoder());
+// One per PAU AdministeredAgent. The CLI makes no network calls, so the PAU
+// decoder here always reports its dispatch table as frozen and unverified.
+for (const decoder of createPauAgentDecoders()) decoderRegistry.register(decoder);
 
 export function createVerifyCommand(): Command {
   const command = new Command('verify');

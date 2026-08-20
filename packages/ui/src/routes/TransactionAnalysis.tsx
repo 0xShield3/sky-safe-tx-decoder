@@ -9,6 +9,11 @@ import {
   SPBEAMDecoder,
   StUsdsRateSetterDecoder,
   PASConfiguratorDecoder,
+  createPauAgentDecoders,
+  pauVerificationTargets,
+  verifyPauDispatches,
+  describePauDispatchMismatch,
+  isPauFrozenTableCaveat,
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
@@ -26,6 +31,8 @@ import {
   type SafeApiDataDecoded,
   type DecodeVerificationResult,
   type SourcifyDecodeResult,
+  type DecodedFunction,
+  type PauVerification,
 } from '@shield3/sky-safe-core';
 import { AddressHighlighter } from '../components/AddressHighlighter';
 import { Address } from '../components/Address';
@@ -42,6 +49,8 @@ decoderRegistry.register(new LockstakeEngineDecoder());
 decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
 decoderRegistry.register(new PASConfiguratorDecoder());
+// One per PAU AdministeredAgent — see packages/core/src/decoders/PAU.md.
+for (const decoder of createPauAgentDecoders()) decoderRegistry.register(decoder);
 
 /**
  * Whether this Safe's data is being served by the development-only mock.
@@ -111,6 +120,185 @@ function DecodedParamList({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The calls a decoder unpacked out of one call — a MultiSend inside a
+ * MultiSend, or the individual Controller calls inside a PAU
+ * `AdministeredAgent.batchCall`.
+ *
+ * Shared by the top-level decoded pane and each MultiSend item, so a batch
+ * renders the same wherever it appears. Before this existed only the top-level
+ * pane rendered `nested`, and a batch reached through a MultiSend showed its
+ * summary with none of its calls.
+ */
+/**
+ * The warnings a decoding carries, minus the PAU frozen-table caveat.
+ *
+ * That caveat says the dispatch table was not checked against the chain. It is
+ * correct for the CLI, which makes no network calls, and wrong here: this app
+ * always runs the live check and surfaces the two problem states itself (a
+ * verified result renders nothing).
+ */
+function withoutPauFrozenCaveat(warnings: string[] | undefined): string[] {
+  return (warnings ?? []).filter((warning) => !isPauFrozenTableCaveat(warning));
+}
+
+function NestedCallList({ calls }: { calls: DecodedFunction[] }) {
+  if (calls.length === 0) return null;
+  return (
+    <div className="border-t pt-4 mt-3">
+      <p className="font-semibold mb-3">Nested Calls ({calls.length}):</p>
+      <div className="space-y-3">
+        {calls.map((call, idx) => (
+          <div key={idx} className="bg-gray-50 rounded-lg p-4 border">
+            <div className="flex items-start gap-2 mb-2">
+              <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">
+                Call {idx + 1}
+              </span>
+              <div className="flex-1">
+                <p className="font-semibold">{call.name}</p>
+                <p className="text-xs font-mono text-gray-500 break-all">{call.signature}</p>
+              </div>
+            </div>
+            {call.explanation && (
+              <div className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">
+                <AddressHighlighter text={call.explanation} />
+              </div>
+            )}
+            {call.parameters.length > 0 && (
+              <div className="space-y-2 mt-3">
+                {call.parameters.map((param, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-semibold">{param.name}</span>
+                    <span className="text-gray-500"> ({param.type})</span>
+                    <div className="text-xs bg-white p-2 rounded border mt-1 break-all">
+                      <ParamValue type={param.type} value={toDisplayValue(param.value)} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* This call's own bytes, next to the decoding of those same bytes.
+                Behind a disclosure because a signer reads the decoding first
+                and the hex only to check it — never shortened, and never
+                summarised. */}
+            {call.rawCalldata && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer text-gray-600 hover:underline">
+                  Raw calldata
+                </summary>
+                <div className="mt-1 bg-white p-2 rounded border font-mono break-all text-gray-700">
+                  {call.rawCalldata}
+                </div>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Provenance banner for a PAU Controller call.
+ *
+ * The PAU decoder resolves a Controller call selector against a table frozen at
+ * a recorded block. That table is a copy of on-chain state, and a stale copy
+ * does not fail to decode — it names the wrong facet function while the
+ * arguments still round-trip. The banner states which of the three cases the
+ * signer is looking at, and never lets the frozen case pass silently.
+ *
+ * `mismatch` is rendered by the caller in place of the decoding, not beside it.
+ */
+function PauDispatchBanner({ results, pending }: { results: PauVerification[]; pending: boolean }) {
+  if (pending) {
+    return (
+      <div className="mt-3 flex items-center gap-2 rounded border border-slate-300 bg-slate-50 p-2 text-xs text-slate-700" role="status" aria-live="polite">
+        <Spinner />
+        Checking the frozen PAU dispatch table against the Controller…
+      </div>
+    );
+  }
+
+  if (results.length === 0) return null;
+
+  // A verified result renders nothing. The check exists to catch a stale
+  // table; when the chain agrees, green text would only train signers to
+  // scroll past banners. Only the two problem states speak.
+  const unavailable = results.filter((result) => result.status === 'unavailable');
+
+  return (
+    <div className="mt-3 space-y-2">
+      {unavailable.map((result, i) => (
+        <div key={`u${i}`} className="rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+          <p className="font-semibold">Function names NOT verified against the chain this session.</p>
+          {result.frozenAtBlock !== undefined ? (
+            <>
+              <p className="mt-1">
+                Names come from a copy frozen at block {result.frozenAtBlock} (
+                {result.frozenAtDate}).
+              </p>
+              <details className="mt-1">
+                <summary className="cursor-pointer hover:underline">Details</summary>
+                <p className="mt-1 break-all">
+                  A selector rewired on chain since then would decode to the same argument types
+                  under a different function name. Check {result.callSelectors.join(', ')} against
+                  getDispatches on Controller {result.controller} before signing.
+                </p>
+                {result.reason && <p className="mt-1">Reason: {result.reason}</p>}
+              </details>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 break-all">Controller {result.controller}.</p>
+              {result.reason && <p className="mt-1">Reason: {result.reason}</p>}
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The refusal. Rendered instead of a decoding, never beside one.
+ *
+ * A frozen entry that disagrees with the chain would still produce a clean,
+ * round-tripping decoding under the wrong function name, so presenting the
+ * arguments at all would be presenting a claim this build cannot stand behind.
+ */
+function PauDispatchMismatchBlock({ results, calldata }: { results: PauVerification[]; calldata: string }) {
+  return (
+    <div className="mt-3 rounded border-4 border-red-500 bg-red-50 p-3">
+      <p className="font-bold text-red-900">
+        DO NOT SIGN — the Controller&apos;s dispatch table does not match this build&apos;s frozen copy.
+      </p>
+      <p className="mt-2 text-sm text-red-900">
+        This build resolves a PAU call selector to a facet function through a table frozen at a
+        recorded block. For this call the Controller reports something different, so the function
+        name and arguments this build would show are not what executes. The decoding is withheld
+        rather than shown with a caveat.
+      </p>
+      {results.map((result, i) => (
+        <div key={i} className="mt-2 space-y-1">
+          {result.frozenAtBlock !== undefined && (
+            <p className="text-xs text-red-900">
+              Controller {result.controller}, table frozen at block {result.frozenAtBlock} (
+              {result.frozenAtDate}).
+            </p>
+          )}
+          {result.mismatches.map((mismatch, j) => (
+            <p key={j} className="text-xs text-red-900 break-all font-mono">
+              {describePauDispatchMismatch(mismatch)}
+            </p>
+          ))}
+        </div>
+      ))}
+      <p className="mt-2 text-xs font-semibold text-red-900">Raw calldata:</p>
+      <p className="text-xs text-red-900 break-all font-mono">{calldata}</p>
     </div>
   );
 }
@@ -314,6 +502,20 @@ export default function TransactionAnalysis() {
     txKey: null,
     keys: {},
   });
+  /**
+   * Live checks of the frozen PAU dispatch table, keyed the same way as the
+   * Sourcify results ('top' or a nested MultiSend index) and scoped to one
+   * transaction.
+   *
+   * `pending` starts true for every key that has PAU calldata, so the banner
+   * says "checking" rather than showing a frozen-table caveat that a completed
+   * check is about to replace.
+   */
+  const [pauChecks, setPauChecks] = useState<{
+    txKey: string | null;
+    results: Record<string, PauVerification[]>;
+    pending: Record<string, boolean>;
+  }>({ txKey: null, results: {}, pending: {} });
   const [loading, setLoading] = useState(true);
   const [loadingMessage, setLoadingMessage] = useState('Loading transaction...');
   const [error, setError] = useState<string | null>(null);
@@ -621,6 +823,78 @@ export default function TransactionAnalysis() {
     };
   }, [transaction, undecodable, multiSendTxs, sourcifyFallback, chainId, network]);
 
+  // PAU dispatch check: for every call this transaction makes to a PAU
+  // AdministeredAgent, ask the Controller what its call selectors dispatch to
+  // and compare the answer to this build's frozen table.
+  //
+  // This is not an ABI lookup and is not gated on the Sourcify setting. The
+  // frozen table is the one place in this tool where a stale copy produces a
+  // confident WRONG label rather than a missing one, and one eth_call is what
+  // turns that into a loud failure. When the call cannot be made the decoding
+  // still renders, with the frozen-at block stated — which is also the CLI's
+  // permanent behaviour, since the CLI makes no network calls at all.
+  useEffect(() => {
+    setPauChecks({ txKey: transaction?.safeTxHash ?? null, results: {}, pending: {} });
+    if (!transaction) return;
+
+    const work: Array<{ key: string; target: ReturnType<typeof pauVerificationTargets>[number] }> = [];
+
+    const collect = (key: string, to: string, data: string | null | undefined) => {
+      if (!data || data === '0x') return;
+      for (const target of pauVerificationTargets(to, data as `0x${string}`)) {
+        work.push({ key, target });
+      }
+    };
+
+    collect('top', transaction.to, transaction.data);
+    multiSendTxs?.forEach((item, index) => collect(String(index), item.tx.to, item.tx.data));
+
+    if (work.length === 0) return;
+
+    const pending: Record<string, boolean> = {};
+    for (const item of work) pending[item.key] = true;
+    setPauChecks({ txKey: transaction.safeTxHash, results: {}, pending });
+
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const rpcUrl = (() => {
+      try {
+        return getNetwork(network).rpcUrl;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    (async () => {
+      await Promise.all(
+        work.map(async ({ key, target }) => {
+          const result = rpcUrl
+            ? await verifyPauDispatches({ rpcUrl, target, signal: controller.signal })
+            : ({
+                controller: target.controller,
+                status: 'unavailable' as const,
+                callSelectors: target.callSelectors,
+                mismatches: [],
+                unknownSelectors: [],
+                reason: 'no RPC endpoint is configured for this network',
+              } satisfies PauVerification);
+          if (cancelled) return;
+          setPauChecks((prev) => ({
+            txKey: prev.txKey,
+            results: { ...prev.results, [key]: [...(prev.results[key] ?? []), result] },
+            pending: { ...prev.pending, [key]: false },
+          }));
+        })
+      );
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [transaction, multiSendTxs, network]);
+
   // Handler for switching between multiple transactions
   const handleTransactionSwitch = (safeTxHash: string) => {
     navigate(`/safe/${network}/${address}/tx/${nonce}?safeTxHash=${safeTxHash}`);
@@ -672,6 +946,15 @@ export default function TransactionAnalysis() {
   // for the whole wait rather than the pane going empty.
   const showRawOnly = undecodable && !sourcifyTop;
   const effectiveViewMode = showRawOnly ? 'raw' : viewMode;
+
+  // PAU dispatch check, scoped to this transaction the same way the Sourcify
+  // results are. `pauRefused` gates the decoded rendering: a frozen entry that
+  // disagrees with the chain is withheld, not annotated.
+  const pauScoped = pauChecks.txKey === transaction.safeTxHash;
+  const pauResults = (key: string) => (pauScoped ? (pauChecks.results[key] ?? []) : []);
+  const pauPending = (key: string) => pauScoped && pauChecks.pending[key] === true;
+  const pauRefused = (key: string) =>
+    pauResults(key).some((result) => result.status === 'mismatch');
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -948,9 +1231,16 @@ export default function TransactionAnalysis() {
                 </div>
               </div>
 
+              {/* A PAU dispatch mismatch withholds the decoding entirely. See
+                  PauDispatchMismatchBlock. */}
+              {customDecoded && pauRefused('top') && (
+                <PauDispatchMismatchBlock results={pauResults('top')} calldata={transaction.data ?? '0x'} />
+              )}
+
               {/* Enhanced Custom Decoder */}
-              {customDecoded && (
+              {customDecoded && !pauRefused('top') && (
                 <div className="space-y-4">
+                  <PauDispatchBanner results={pauResults('top')} pending={pauPending('top')} />
                   <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                     <div className="flex items-start gap-2 mb-3">
                       <span className="text-lg">🔍</span>
@@ -1004,11 +1294,11 @@ export default function TransactionAnalysis() {
                     </div>
                   )}
 
-                  {customDecoded.main.warnings && customDecoded.main.warnings.length > 0 && (
+                  {withoutPauFrozenCaveat(customDecoded.main.warnings).length > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                       <p className="font-semibold text-yellow-900 mb-2">⚠️ Function-Specific Warnings:</p>
                       <ul className="text-sm space-y-1">
-                        {customDecoded.main.warnings.map((warning, i) => (
+                        {withoutPauFrozenCaveat(customDecoded.main.warnings).map((warning, i) => (
                           <li key={i} className="text-yellow-800">
                             • {warning}
                           </li>
@@ -1018,44 +1308,7 @@ export default function TransactionAnalysis() {
                   )}
 
                   {/* Nested Calls */}
-                  {customDecoded.nested && customDecoded.nested.length > 0 && (
-                    <div className="border-t pt-4">
-                      <p className="font-semibold mb-3">Nested Calls ({customDecoded.nested.length}):</p>
-                      <div className="space-y-3">
-                        {customDecoded.nested.map((call, idx) => (
-                          <div key={idx} className="bg-gray-50 rounded-lg p-4 border">
-                            <div className="flex items-start gap-2 mb-2">
-                              <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">
-                                Call {idx + 1}
-                              </span>
-                              <div className="flex-1">
-                                <p className="font-semibold">{call.name}</p>
-                                <p className="text-xs font-mono text-gray-500">{call.signature}</p>
-                              </div>
-                            </div>
-                            {call.explanation && (
-                              <div className="text-sm text-gray-600 mb-2">
-                                <AddressHighlighter text={call.explanation} />
-                              </div>
-                            )}
-                            {call.parameters.length > 0 && (
-                              <div className="space-y-2 mt-3">
-                                {call.parameters.map((param, i) => (
-                                  <div key={i} className="text-sm">
-                                    <span className="font-semibold">{param.name}</span>
-                                    <span className="text-gray-500"> ({param.type})</span>
-                                    <div className="text-xs bg-white p-2 rounded border mt-1 break-all">
-                                      <ParamValue type={param.type} value={param.value} />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {customDecoded.nested && <NestedCallList calls={customDecoded.nested} />}
                 </div>
               )}
 
@@ -1127,10 +1380,22 @@ export default function TransactionAnalysis() {
                         </div>
                       </div>
 
+                      {/* A PAU dispatch mismatch withholds this call's decoding. */}
+                      {item.decoded && pauRefused(String(idx)) && (
+                        <PauDispatchMismatchBlock
+                          results={pauResults(String(idx))}
+                          calldata={item.tx.data}
+                        />
+                      )}
+
                       {/* Custom decoded data for nested transaction */}
-                      {item.decoded && (
+                      {item.decoded && !pauRefused(String(idx)) && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
-                          <div className="bg-purple-50 rounded p-3 border border-purple-200 mb-3">
+                          <PauDispatchBanner
+                            results={pauResults(String(idx))}
+                            pending={pauPending(String(idx))}
+                          />
+                          <div className="bg-purple-50 rounded p-3 border border-purple-200 mb-3 mt-3">
                             <p className="font-semibold text-purple-900">{item.decoded.main.name}</p>
                             <p className="text-xs font-mono text-purple-600">{item.decoded.main.signature}</p>
                             {item.decoded.main.explanation && (
@@ -1163,15 +1428,20 @@ export default function TransactionAnalysis() {
                               ))}
                             </div>
                           )}
-                          {item.decoded.main.warnings && item.decoded.main.warnings.length > 0 && (
+                          {withoutPauFrozenCaveat(item.decoded.main.warnings).length > 0 && (
                             <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
-                              {item.decoded.main.warnings.map((warning, i) => (
-                                <p key={i} className="text-xs text-yellow-800">
+                              {withoutPauFrozenCaveat(item.decoded.main.warnings).map((warning, i) => (
+                                <p key={i} className="text-xs text-yellow-800 break-all">
                                   ⚠️ {warning}
                                 </p>
                               ))}
                             </div>
                           )}
+                          {/* The calls this one unpacks into. A PAU batchCall
+                              reached through a MultiSend renders every
+                              Controller call here; without this the batch showed
+                              only its summary. */}
+                          {item.decoded.nested && <NestedCallList calls={item.decoded.nested} />}
                         </div>
                       )}
 

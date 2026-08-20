@@ -273,6 +273,17 @@ function printDecodedFunction(func: DecodedFunction, index: number): void {
     }
   }
 
+  // Print the raw calldata of a nested call, where the decoder carried it.
+  // A batch decoder puts each call's target and calldata on the call itself,
+  // so the raw bytes stay next to the decoding of those same bytes. Printed in
+  // full: a hex string is the one thing this tool must never shorten.
+  if (func.target) {
+    console.log(`${prefix}${chalk.dim('Target:')} ${chalk.cyan(func.target)}`);
+  }
+  if (func.rawCalldata) {
+    console.log(`${prefix}${chalk.dim('Raw calldata:')} ${chalk.gray(func.rawCalldata)}`);
+  }
+
   // Print function-specific warnings
   if (func.warnings && func.warnings.length > 0) {
     for (const warning of func.warnings) {
