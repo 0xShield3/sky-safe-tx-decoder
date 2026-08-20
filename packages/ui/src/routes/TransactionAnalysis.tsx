@@ -42,6 +42,20 @@ decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
 
 /**
+ * Whether this Safe's data is being served by the development-only mock.
+ *
+ * Reads a global the mock sets rather than importing it, so the production
+ * bundle keeps no reference to that module at all. `import.meta.env.DEV` is
+ * replaced with `false` in a production build, so this collapses to a constant
+ * `false` and every caller's branch is eliminated.
+ */
+function isSimulatedSafe(address: string | undefined): boolean {
+  if (!import.meta.env.DEV) return false;
+  const mocked = window.__safeApiMockAddress;
+  return !!mocked && !!address && mocked.toLowerCase() === address.toLowerCase();
+}
+
+/**
  * Deep-convert bigints to strings so a decoded value can be rendered.
  * viem returns integers as bigint, and JSON.stringify (used by ParamValue for
  * arrays/tuples) throws on bigint. Scalars stay renderable — a numeric string
@@ -623,6 +637,23 @@ export default function TransactionAnalysis() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {/* Simulated-data banner. `import.meta.env.DEV` is replaced with false in
+          a production build, so this branch and its strings are eliminated
+          along with the mock itself. See src/dev/mockSafeApi.ts. */}
+      {import.meta.env.DEV && isSimulatedSafe(address) && (
+        <div className="border-4 border-fuchsia-500 bg-fuchsia-50 rounded-lg p-4">
+          <p className="font-bold text-fuchsia-900">SIMULATED DATA. NOT A REAL TRANSACTION.</p>
+          <p className="text-sm text-fuchsia-900 mt-1">
+            This transaction was constructed locally to review how the decoder renders. It is not
+            from any Safe, nobody proposed it, and it cannot be signed.
+          </p>
+          <p className="text-sm text-fuchsia-900 mt-2">
+            The hash check below will fail. That is expected: the fixture carries a placeholder
+            safeTxHash, and the app recomputes the real one rather than trusting it.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-2">
