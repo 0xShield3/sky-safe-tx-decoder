@@ -240,10 +240,10 @@ describe('resolveRateLimitKey — Grove\'s live key set', () => {
     // meters a 1e18-normalised sum across both tokens; keyed by token and pool
     // it meters raw 6-decimal token amounts. Reading one as the other is a
     // factor of 10^12.
-    ['0xd3384d5424cd179640223010fed859f38b86b26e5e0b9ee88b87321b98882f57', 'LIMIT_UNISWAP_V3_DEPOSIT', 'normalised'],
+    ['0xd3384d5424cd179640223010fed859f38b86b26e5e0b9ee88b87321b98882f57', 'LIMIT_UNISWAP_V3_DEPOSIT', '(1e18-normalised)'],
     ['0x89c0cb8c17898781d7c1776eafcf73fd0b570659ad5c3791ddcbefe66b001541', 'LIMIT_UNISWAP_V3_DEPOSIT', 'AUSD'],
     ['0x71efb11b03476e40dcc1ade629d360114fcbf838d70a3211270f69414ba9a187', 'LIMIT_UNISWAP_V3_DEPOSIT', 'USDC'],
-    ['0xbe8cbf4b779bbe60101d88f64a8afcc8fdf78863df4303da9047b66fcf427734', 'LIMIT_UNISWAP_V3_WITHDRAW', 'normalised'],
+    ['0xbe8cbf4b779bbe60101d88f64a8afcc8fdf78863df4303da9047b66fcf427734', 'LIMIT_UNISWAP_V3_WITHDRAW', '(1e18-normalised)'],
     ['0xf353a8cb19089be9c21260f788c98069b2cef6a8a4bf9d061b3e5e7629a85671', 'LIMIT_UNISWAP_V3_WITHDRAW', 'AUSD'],
     ['0x17c7a2da0785bd1ad67b8207080dbc243cfc4e573cbac18a68d0bd4b788a1dfc', 'LIMIT_UNISWAP_V3_WITHDRAW', 'USDC'],
     ['0x7dd93dac252469b97c259284118454a6a09efd0e5f781dec59acc240f8f88402', 'LIMIT_UNISWAP_V3_SWAP', 'AUSD'],

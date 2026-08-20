@@ -236,7 +236,7 @@ export const RATE_LIMIT_KEYS: readonly RateLimitKeyDefinition[] = [
     shapeDenomination: {
       // The pool-only key meters the 1e18-normalised sum across both pool
       // tokens. The token-and-pool keys meter raw token amounts.
-      address: { symbol: 'normalised', decimals: 18, note: 'Aggregate across both pool tokens, normalised to 1e18.' },
+      address: { symbol: '(1e18-normalised)', decimals: 18, note: 'Aggregate across both pool tokens, normalised to 1e18.' },
     },
     summary: 'Add liquidity to one Uniswap v3 pool.',
   },
@@ -255,7 +255,7 @@ export const RATE_LIMIT_KEYS: readonly RateLimitKeyDefinition[] = [
     shapeDenomination: {
       // The pool-only key meters the 1e18-normalised sum across both pool
       // tokens. The token-and-pool keys meter raw token amounts.
-      address: { symbol: 'normalised', decimals: 18, note: 'Aggregate across both pool tokens, normalised to 1e18.' },
+      address: { symbol: '(1e18-normalised)', decimals: 18, note: 'Aggregate across both pool tokens, normalised to 1e18.' },
     },
     summary: 'Remove liquidity from one Uniswap v3 pool.',
   },
