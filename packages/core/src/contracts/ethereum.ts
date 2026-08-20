@@ -61,6 +61,13 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
+    address: '0xbAFeAd7c60Ea473758ED6c6021505E8BBd7e8E5d',
+    label: 'Uniswap v3 AUSD/USDC',
+    description:
+      'Uniswap v3 AUSD/USDC pool used by the Grove PAU — an operand of the LIMIT_UNISWAP_V3_DEPOSIT, LIMIT_UNISWAP_V3_WITHDRAW and LIMIT_UNISWAP_V3_SWAP rate-limit keys',
+    category: 'protocol',
+  },
+  {
     address: '0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB',
     label: 'MCD_Pause_proxy',
     description: 'Sky governance pause proxy — executes passed governance spells',
@@ -149,6 +156,13 @@ export const CONTRACTS: NetworkContract[] = [
     description: 'MakerDAO DAI stablecoin',
     category: 'token',
     decimals: 18,
+  },
+  {
+    address: '0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a',
+    label: 'AUSD',
+    description: 'Agora USD stablecoin',
+    category: 'token',
+    decimals: 6,
   },
 
   // Wrapped natives

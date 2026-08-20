@@ -81,11 +81,11 @@ describe('RATE_LIMIT_KEYS', () => {
   it('should carry diamond-pau shapes, not spark-alm-controller ones', () => {
     // These three differ between the two repositories for the same key name.
     // Taking spark's shape yields a hash that matches nothing on a Grove PAU.
-    const shapeOf = (name: string) => RATE_LIMIT_KEYS.find(k => k.name === name)!.shape;
+    const shapesOf = (name: string) => RATE_LIMIT_KEYS.find(k => k.name === name)!.shapes;
 
-    expect(shapeOf('LIMIT_4626_DEPOSIT')).toBe('address+address');
-    expect(shapeOf('LIMIT_AAVE_DEPOSIT')).toBe('address+address+address');
-    expect(shapeOf('LIMIT_UNISWAP_V4_SWAP')).toBe('address+bytes32');
+    expect(shapesOf('LIMIT_4626_DEPOSIT')).toContain('address+address');
+    expect(shapesOf('LIMIT_AAVE_DEPOSIT')).toContain('address+address+address');
+    expect(shapesOf('LIMIT_UNISWAP_V4_SWAP')).toContain('address+bytes32');
   });
 
   it('should split the operations spark-alm-controller combines', () => {
@@ -101,7 +101,7 @@ describe('RATE_LIMIT_KEYS', () => {
     // BasinFacet rate-limits `amount` of `asset`, and `asset` is operand 0.
     for (const name of ['LIMIT_BASIN_DEPOSIT', 'LIMIT_BASIN_WITHDRAW']) {
       const key = RATE_LIMIT_KEYS.find(k => k.name === name)!;
-      expect(key.shape).toBe('address+address');
+      expect(key.shapes).toEqual(['address+address']);
       expect(key.denominationOperand).toBe(0);
       expect(key.denomination).toBeUndefined();
     }
@@ -221,6 +221,8 @@ describe('resolveRateLimitKey — Grove\'s live key set', () => {
     { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as `0x${string}`, label: 'USDC', decimals: 6 },
     { address: '0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9' as `0x${string}`, label: 'JTRSY Grove Basin' },
     { address: '0xCBa428fB052B365557DAf52b744DFfF20d5FbEdD' as `0x${string}`, label: 'BUIDL Grove Basin' },
+    { address: '0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a' as `0x${string}`, label: 'AUSD', decimals: 6 },
+    { address: '0xbAFeAd7c60Ea473758ED6c6021505E8BBd7e8E5d' as `0x${string}`, label: 'Uniswap v3 AUSD/USDC' },
   ];
 
   const LIVE: Array<[Hex, string, string | undefined]> = [
@@ -234,9 +236,21 @@ describe('resolveRateLimitKey — Grove\'s live key set', () => {
     ['0xdfd7309f2f1b84a83ada77042d91e79a9cb3daf3ecd4c5335dede65b95c888f5', 'LIMIT_BASIN_WITHDRAW', 'USDC'],
     ['0xac6b1419c7365d44c458289fbd4b91c1913427601113863b9293594a6885baff', 'LIMIT_BASIN_WITHDRAW', 'USDS'],
     ['0x85d9f9cee2ba35ec7240969418f2edcc157ced3dfc6c1b85aa986a1b3026d4b7', 'LIMIT_BASIN_WITHDRAW', 'USDC'],
+    // Uniswap v3. The same name at two arities: keyed by the pool alone it
+    // meters a 1e18-normalised sum across both tokens; keyed by token and pool
+    // it meters raw 6-decimal token amounts. Reading one as the other is a
+    // factor of 10^12.
+    ['0xd3384d5424cd179640223010fed859f38b86b26e5e0b9ee88b87321b98882f57', 'LIMIT_UNISWAP_V3_DEPOSIT', 'normalised'],
+    ['0x89c0cb8c17898781d7c1776eafcf73fd0b570659ad5c3791ddcbefe66b001541', 'LIMIT_UNISWAP_V3_DEPOSIT', 'AUSD'],
+    ['0x71efb11b03476e40dcc1ade629d360114fcbf838d70a3211270f69414ba9a187', 'LIMIT_UNISWAP_V3_DEPOSIT', 'USDC'],
+    ['0xbe8cbf4b779bbe60101d88f64a8afcc8fdf78863df4303da9047b66fcf427734', 'LIMIT_UNISWAP_V3_WITHDRAW', 'normalised'],
+    ['0xf353a8cb19089be9c21260f788c98069b2cef6a8a4bf9d061b3e5e7629a85671', 'LIMIT_UNISWAP_V3_WITHDRAW', 'AUSD'],
+    ['0x17c7a2da0785bd1ad67b8207080dbc243cfc4e573cbac18a68d0bd4b788a1dfc', 'LIMIT_UNISWAP_V3_WITHDRAW', 'USDC'],
+    ['0x7dd93dac252469b97c259284118454a6a09efd0e5f781dec59acc240f8f88402', 'LIMIT_UNISWAP_V3_SWAP', 'AUSD'],
+    ['0x6e850dcb18bea10055c82d1e3753f551b1228d04b81350ba117235de19f9a0da', 'LIMIT_UNISWAP_V3_SWAP', 'USDC'],
   ];
 
-  it('should resolve all ten', () => {
+  it('should resolve all eighteen', () => {
     for (const [key, name] of LIVE) {
       const resolved = resolveRateLimitKey(key, GROVE_CANDIDATES);
       expect(resolved, `unresolved: ${key}`).not.toBeNull();
@@ -251,6 +265,26 @@ describe('resolveRateLimitKey — Grove\'s live key set', () => {
       const resolved = resolveRateLimitKey(key, GROVE_CANDIDATES);
       expect(resolved!.denomination?.symbol, `wrong denomination for ${key}`).toBe(symbol);
     }
+  });
+
+  it('should distinguish the two arities of the same key name', () => {
+    // The aggregate key and the per-token key share a name but are different
+    // budgets with different scales. Resolving one as the other would misstate
+    // the amount by 10^12.
+    const aggregate = resolveRateLimitKey(
+      '0xd3384d5424cd179640223010fed859f38b86b26e5e0b9ee88b87321b98882f57',
+      GROVE_CANDIDATES
+    )!;
+    const perToken = resolveRateLimitKey(
+      '0x89c0cb8c17898781d7c1776eafcf73fd0b570659ad5c3791ddcbefe66b001541',
+      GROVE_CANDIDATES
+    )!;
+
+    expect(aggregate.definition.name).toBe(perToken.definition.name);
+    expect(aggregate.shape).toBe('address');
+    expect(perToken.shape).toBe('address+address');
+    expect(aggregate.denomination!.decimals).toBe(18);
+    expect(perToken.denomination!.decimals).toBe(6);
   });
 
   it('should reproduce each key exactly from the name it reports', () => {
