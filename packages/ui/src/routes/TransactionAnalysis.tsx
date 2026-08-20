@@ -205,34 +205,47 @@ function PauDispatchBanner({ results, pending }: { results: PauVerification[]; p
     <div className="mt-3 space-y-2">
       {verified.map((result, i) => (
         <div key={`v${i}`} className="rounded border border-green-300 bg-green-50 p-2 text-xs text-green-900">
-          <p className="font-semibold">Dispatch table verified against the chain this session.</p>
-          <p className="mt-1 break-all">
-            Controller {result.controller} reports the same facet and delegate selector as this
-            build&apos;s frozen table for {result.callSelectors.length} call selector
-            {result.callSelectors.length === 1 ? '' : 's'}: {result.callSelectors.join(', ')}
-          </p>
-          {result.frozenAtBlock !== undefined && (
-            <p className="mt-1">
-              Table frozen at block {result.frozenAtBlock} ({result.frozenAtDate}).
+          <p className="font-semibold">Function names verified against the chain just now.</p>
+          <details className="mt-1">
+            <summary className="cursor-pointer hover:underline">Details</summary>
+            <p className="mt-1 break-all">
+              Controller {result.controller} reports the same facet and delegate selector as this
+              build&apos;s frozen table for {result.callSelectors.length} call selector
+              {result.callSelectors.length === 1 ? '' : 's'}: {result.callSelectors.join(', ')}
             </p>
-          )}
+            {result.frozenAtBlock !== undefined && (
+              <p className="mt-1">
+                Table frozen at block {result.frozenAtBlock} ({result.frozenAtDate}).
+              </p>
+            )}
+          </details>
         </div>
       ))}
       {unavailable.map((result, i) => (
         <div key={`u${i}`} className="rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
-          <p className="font-semibold">Dispatch table NOT verified against the chain this session.</p>
+          <p className="font-semibold">Function names NOT verified against the chain this session.</p>
           {result.frozenAtBlock !== undefined ? (
-            <p className="mt-1 break-all">
-              The facet and function names below come from a table frozen at block{' '}
-              {result.frozenAtBlock} ({result.frozenAtDate}) for Controller {result.controller}. A
-              selector rewired since then would decode to the same argument types under a
-              different function name. Check {result.callSelectors.join(', ')} against
-              getDispatches on {result.controller} before signing.
-            </p>
+            <>
+              <p className="mt-1">
+                Names come from a copy frozen at block {result.frozenAtBlock} (
+                {result.frozenAtDate}).
+              </p>
+              <details className="mt-1">
+                <summary className="cursor-pointer hover:underline">Details</summary>
+                <p className="mt-1 break-all">
+                  A selector rewired on chain since then would decode to the same argument types
+                  under a different function name. Check {result.callSelectors.join(', ')} against
+                  getDispatches on Controller {result.controller} before signing.
+                </p>
+                {result.reason && <p className="mt-1">Reason: {result.reason}</p>}
+              </details>
+            </>
           ) : (
-            <p className="mt-1 break-all">Controller {result.controller}.</p>
+            <>
+              <p className="mt-1 break-all">Controller {result.controller}.</p>
+              {result.reason && <p className="mt-1">Reason: {result.reason}</p>}
+            </>
           )}
-          {result.reason && <p className="mt-1">Reason: {result.reason}</p>}
         </div>
       ))}
     </div>

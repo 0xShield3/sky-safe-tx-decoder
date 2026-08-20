@@ -295,14 +295,9 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       signature: 'batchCall(address[],bytes[],uint256[])',
       parameters,
       explanation:
-        `Forward ${targets.length} call${targets.length === 1 ? '' : 's'} through the Sky PAU ` +
-        `AdministeredAgent ${this.contractAddress}.\n\n` +
-        `The AdministeredAgent holds ALLOCATOR_ROLE and forwards each call with a plain ` +
-        `CALL. Where the target is a PAU Controller, the Controller looks up the 4-byte call ` +
-        `selector in its own dispatch table and delegatecalls a facet with a DIFFERENT ` +
-        `selector. Both selectors are shown in full for every call below.\n\n` +
-        `Each call is decoded separately. See the individual calls for the facet, the ` +
-        `executing function, and the arguments.`,
+        `Forwards ${targets.length} call${targets.length === 1 ? '' : 's'} through the Sky PAU ` +
+        `AdministeredAgent ${this.contractAddress}. Each call below shows the function that ` +
+        `executes and its arguments.`,
       warnings,
       riskLevel: nested.some(call => call.riskLevel === 'high') ? 'high' : 'medium',
     }
