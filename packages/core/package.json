@@ -1,6 +1,6 @@
 {
   "name": "@shield3/sky-safe-core",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Core Safe transaction hash calculation and decoding logic",
   "type": "module",
   "main": "./dist/index.js",
