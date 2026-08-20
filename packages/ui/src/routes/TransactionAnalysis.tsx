@@ -792,7 +792,7 @@ export default function TransactionAnalysis() {
               <button
                 onClick={() => setViewMode('decoded')}
                 disabled={showRawOnly}
-                title={showRawOnly ? 'Unable to decode this transaction — showing raw data' : undefined}
+                title={showRawOnly ? 'Not decoded: no ABI found. Showing raw data.' : undefined}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   showRawOnly
                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -829,34 +829,24 @@ export default function TransactionAnalysis() {
 
           {undecodable && !sourcifyTop && sourcifyPendingTop && (
             <div className="mb-6 bg-slate-50 border border-slate-300 rounded-lg p-4" role="status" aria-live="polite">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2">
                 <Spinner />
                 <p className="font-semibold text-slate-800">Checking Sourcify for a verified ABI…</p>
               </div>
-              <p className="text-sm text-slate-700">
-                The Safe API has no ABI for this contract, and no decoder in this tool covers it. Looking for one
-                verified against this contract&rsquo;s on-chain bytecode. The raw data below is already final and does
-                not depend on the result.
-              </p>
-              <p className="text-sm text-slate-700 mt-2">
-                Hash verification below is unaffected — it does not depend on decoding.
-              </p>
             </div>
           )}
 
           {undecodable && !sourcifyTop && !sourcifyPendingTop && (
             <div className="mb-6 bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
-              <p className="font-semibold text-amber-900 mb-2">Unable to decode this transaction</p>
-              <p className="text-sm text-amber-900">
-                The Safe API has no ABI for this contract, and no decoder in this tool covers it.
-                {sourcifyFallback
-                  ? ' Sourcify has no verified ABI for it either.'
-                  : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
-                Verify the raw data below against an independent source before signing.
+              <p className="font-semibold text-amber-900">Not decoded: no ABI found</p>
+              <p className="text-sm text-amber-900 mt-1">
+                Verify the raw data below independently before signing.
               </p>
-              <p className="text-sm text-amber-900 mt-2">
-                Hash verification below is unaffected — it does not depend on decoding.
-              </p>
+              {!sourcifyFallback && (
+                <p className="text-sm text-amber-900 mt-2">
+                  Enable Sourcify fallback in Settings to search additional sources for the ABI.
+                </p>
+              )}
             </div>
           )}
 
@@ -1211,13 +1201,11 @@ export default function TransactionAnalysis() {
                               </div>
                             ) : (
                               <div className="bg-amber-50 rounded p-3 border border-amber-200">
-                                <p className="font-semibold text-amber-900 mb-1">Unable to decode</p>
+                                <p className="font-semibold text-amber-900 mb-1">Not decoded: no ABI found</p>
                                 <p className="text-xs text-amber-800 mb-3">
-                                  Neither the Safe API nor this tool could decode this call.
-                                  {sourcifyFallback
-                                    ? ' Sourcify has no verified ABI for it either.'
-                                    : ' Enable the Sourcify fallback in Settings to try a verified ABI.'}{' '}
-                                  Verify the raw calldata below against an independent source before signing.
+                                  Verify the calldata below independently before signing.
+                                  {!sourcifyFallback &&
+                                    ' Enable Sourcify fallback in Settings to search additional sources for the ABI.'}
                                 </p>
                                 <p className="text-xs font-semibold text-gray-700">Function selector:</p>
                                 <p className="text-xs font-mono bg-white p-2 rounded border break-all mb-2">

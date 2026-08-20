@@ -112,13 +112,12 @@ export function printDecodedData(
       // cached for the target contract. Say that plainly and show the selector
       // — this tool does not guess a signature from four bytes.
       printHeader('Decoded Data');
-      printField('Method', 'Unable to decode');
+      printField('Method', 'Not decoded');
       printField('Function selector', tx.data.slice(0, 10));
       console.log(
         chalk.dim(
-          '  The Safe Transaction Service has no ABI for this contract, so it\n' +
-            '  returned no decoded parameters. Verify the raw calldata above against\n' +
-            '  an independent source before signing.'
+          '  No ABI for this contract in the Safe Transaction Service.\n' +
+            '  Verify the raw calldata above independently before signing.'
         )
       );
     }
@@ -220,7 +219,7 @@ export function printNestedTransactionData(
   // prefix. This is a signing tool: hiding bytes past a cutoff would conceal
   // the very arguments (recipient, amount) the signer must verify.
   else if (data && data !== '0x') {
-    console.log(chalk.yellow('\n  Unable to decode — verify the raw calldata before signing.'));
+    console.log(chalk.yellow('\n  Not decoded: no ABI found. Verify the raw calldata before signing.'));
     console.log(`  Function selector: ${chalk.cyan(data.slice(0, 10))}`);
     console.log(`  Calldata: ${chalk.dim(data)}`);
   }
