@@ -86,6 +86,13 @@ const CALL_CONTROLLER_ACTION: Hex =
 const INNER_ACTION_HASH =
   '0x3521f38af08caab3904476fa6de273e2c3f6fb19d6cba66246ece19db035fc49';
 
+/** Look up a decoded parameter by name, so row order is free to change. */
+function param(main: { parameters: Array<{ name: string; value: unknown }> }, name: string): string {
+  const row = main.parameters.find(p => p.name === name);
+  if (!row) throw new Error(`no parameter named ${name}; have: ${main.parameters.map(p => p.name).join(', ')}`);
+  return String(row.value);
+}
+
 describe('PASConfiguratorDecoder', () => {
   const decoder = new PASConfiguratorDecoder();
 
@@ -116,30 +123,49 @@ describe('PASConfiguratorDecoder', () => {
 
       expect(main.name).toBe('setRateLimit');
       expect(main.signature).toBe('setRateLimit(address,bytes32,uint256,uint256)');
-      expect(String(main.parameters[1]!.value)).toContain('LIMIT_USDS_MINT');
+      expect(param(main, 'key name')).toContain('LIMIT_USDS_MINT');
     });
 
     it('should keep the full bytes32 key alongside the resolved name', () => {
       const { main } = decoder.decode(SET_USDS_MINT);
 
       // The label is a convenience; the bytes are the ground truth and must
-      // never be abbreviated or replaced.
-      expect(String(main.parameters[1]!.value)).toContain(
+      // never be abbreviated or replaced. They live in their own row so a hash
+      // and an address never share a line.
+      expect(param(main, 'key')).toBe(
         '0xcb0537d5e5dba65a8edbac12555995860e5b8e1b70996011edb1ca8173e56d3c'
       );
+      expect(param(main, 'key name')).toBe('LIMIT_USDS_MINT');
+    });
+
+    it('should give each operand its own row', () => {
+      // LIMIT_BASIN_WITHDRAW keyed by USDC and the JTRSY Basin.
+      const twoOperand: Hex =
+        '0x91cc936a' +
+        '000000000000000000000000e016ae733a77ba77e7907aaa749394fc5e75c0e1' +
+        'dfd7309f2f1b84a83ada77042d91e79a9cb3daf3ecd4c5335dede65b95c888f5' +
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' +
+        '0000000000000000000000000000000000000000000000000000000000000000';
+
+      const { main } = decoder.decode(twoOperand);
+
+      expect(param(main, 'key name')).toBe('LIMIT_BASIN_WITHDRAW');
+      expect(param(main, 'scoped to (1 of 2)')).toBe('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48');
+      expect(param(main, 'scoped to (2 of 2)')).toBe('0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9');
     });
 
     it('should show the full RateLimits address, never truncated', () => {
       const { main } = decoder.decode(SET_USDS_MINT);
-      expect(main.parameters[0]!.value).toBe(GROVE_RATE_LIMITS);
+      expect(param(main, 'rateLimits')).toBe(GROVE_RATE_LIMITS);
     });
 
     it('should refuse to name a key it cannot resolve, and say so', () => {
       const { main } = decoder.decode(SET_UNRESOLVABLE_KEY);
 
-      expect(String(main.parameters[1]!.value)).toBe(
+      expect(param(main, 'key')).toBe(
         '0x1111111111111111111111111111111111111111111111111111111111111111'
       );
+      expect(param(main, 'key name')).toBe('UNRESOLVED');
       expect(main.warnings!.join(' ')).toContain('could not be resolved');
       expect(main.riskLevel).toBe('high');
     });
@@ -154,7 +180,7 @@ describe('PASConfiguratorDecoder', () => {
   describe('setRateLimit — denomination', () => {
     it('should scale an 18-decimal key to whole USDS', () => {
       const { main } = decoder.decode(SET_USDS_MINT);
-      const maxAmount = String(main.parameters[2]!.value);
+      const maxAmount = param(main, 'maxAmount');
 
       expect(maxAmount).toContain('5000000000000000000000000');
       expect(maxAmount).toContain('5,000,000');
@@ -163,7 +189,7 @@ describe('PASConfiguratorDecoder', () => {
 
     it('should scale a 6-decimal key to whole USDC, not treat it as 18', () => {
       const { main } = decoder.decode(SET_USDS_TO_USDC);
-      const maxAmount = String(main.parameters[2]!.value);
+      const maxAmount = param(main, 'maxAmount');
 
       // 5000000000000 at 6 decimals is 5,000,000 USDC. Read as 18 decimals it
       // would be 0.000005 — the exact misreading this decoder exists to prevent.
@@ -174,7 +200,7 @@ describe('PASConfiguratorDecoder', () => {
 
     it('should render the per-second slope as a per-day figure', () => {
       const { main } = decoder.decode(SET_USDS_MINT);
-      const slope = String(main.parameters[3]!.value);
+      const slope = param(main, 'slope');
 
       expect(slope).toContain('57870370370370370370');
       expect(slope).toContain('per second');
@@ -185,8 +211,8 @@ describe('PASConfiguratorDecoder', () => {
 
     it('should always keep the raw integer next to any scaled view', () => {
       const { main } = decoder.decode(SET_USDS_TO_USDC);
-      expect(String(main.parameters[2]!.value)).toContain('5000000000000');
-      expect(String(main.parameters[3]!.value)).toContain('57870370');
+      expect(param(main, 'maxAmount')).toContain('5000000000000');
+      expect(param(main, 'slope')).toContain('57870370');
     });
 
     it('should emit a bare integer for maxAmount when the key is unresolved', () => {
@@ -195,7 +221,7 @@ describe('PASConfiguratorDecoder', () => {
       // still states that the scale is undetermined.
       const { main } = decoder.decode(SET_UNRESOLVABLE_KEY);
 
-      expect(main.parameters[2]!.value).toBe('1000');
+      expect(param(main, 'maxAmount')).toBe('1000');
       expect(main.explanation).toContain('raw integers only');
     });
 
@@ -210,14 +236,14 @@ describe('PASConfiguratorDecoder', () => {
         '0000000000000000000000000000000000000000000000000000000000000000';
 
       const { main } = decoder.decode(unlimitedUnresolved);
-      expect(String(main.parameters[2]!.value)).toContain('UNLIMITED');
+      expect(param(main, 'maxAmount')).toContain('UNLIMITED');
     });
   });
 
   describe('setRateLimit — the unlimited sentinel', () => {
     it('should label type(uint256).max as UNLIMITED rather than 78 digits', () => {
       const { main } = decoder.decode(SET_UNLIMITED);
-      const maxAmount = String(main.parameters[2]!.value);
+      const maxAmount = param(main, 'maxAmount');
 
       expect(maxAmount).toContain('UNLIMITED');
       // The exact value stays visible — it is what is being signed
@@ -242,7 +268,7 @@ describe('PASConfiguratorDecoder', () => {
       // it routes to setUnlimitedRateLimitData. An unlimited limit never
       // depletes, so it has nothing to refill.
       const { main } = decoder.decode(SET_UNLIMITED);
-      const slope = String(main.parameters[3]!.value);
+      const slope = param(main, 'slope');
 
       expect(slope).toContain('required for an unlimited key');
       expect(slope).not.toContain('never refills');
@@ -255,9 +281,14 @@ describe('PASConfiguratorDecoder', () => {
   });
 
   describe('setRateLimit — value-shape warnings', () => {
-    it('should warn that a zero slope means the limit never refills', () => {
+    it('should not warn about a zero slope', () => {
+      // Governance seeds keys with slope 0 routinely, so a warning here would
+      // fire constantly and teach a signer to skip the warning block. The
+      // slope value already states what it means inline.
       const { main } = decoder.decode(SET_NO_REFILL);
-      expect(main.warnings!.join(' ')).toContain('never refills');
+
+      expect(main.warnings ?? []).toEqual([]);
+      expect(param(main, 'slope')).toContain('never refills once spent');
     });
 
     it('should warn that a zero maxAmount closes the limit completely', () => {
@@ -267,11 +298,13 @@ describe('PASConfiguratorDecoder', () => {
 
     it('should not claim a direction it cannot know from calldata', () => {
       const { main } = decoder.decode(SET_USDS_MINT);
-      const text = main.explanation + main.warnings!.join(' ');
 
-      // Direction and ceiling need the limit's current on-chain value
-      expect(text).toContain('cannot be determined from calldata');
-      expect(text).toContain('getRateLimitData');
+      // Direction and ceiling need the limit's current on-chain value. This is
+      // true of every call, so it is context in the explanation rather than a
+      // warning: a warning that always fires is not a warning.
+      expect(main.explanation).toContain('not in the calldata');
+      expect(main.explanation).toContain('getRateLimitData');
+      expect(main.warnings ?? []).toEqual([]);
     });
   });
 

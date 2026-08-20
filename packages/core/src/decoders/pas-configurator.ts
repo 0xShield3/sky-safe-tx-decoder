@@ -147,15 +147,11 @@ export class PASConfiguratorDecoder implements CustomDecoder {
     const warnings: string[] = []
 
     // --- The key ---------------------------------------------------------
-    // The full bytes32 is always shown. A resolved name goes beside it, never
-    // in place of it.
-    let keyValue = key
-    if (resolved) {
-      keyValue = `${key} — ${resolved.definition.name}`
-      for (const operand of resolved.operands) {
-        keyValue += `\n    scoped to: ${operand}`
-      }
-    } else {
+    // The full bytes32 stands alone. The resolved name and each operand become
+    // their own rows rather than being packed into one value, so a long hash
+    // and a long address never share a line and each address can be rendered
+    // as an address.
+    if (!resolved) {
       warnings.push(
         `⚠️ Rate-limit key ${key} could not be resolved to a name. This build recomputes ` +
           `keccak preimages to identify a key, and none matched — the key may be scoped to a ` +
@@ -183,13 +179,10 @@ export class PASConfiguratorDecoder implements CustomDecoder {
       )
     }
 
-    // --- A limit that never refills --------------------------------------
-    if (slope === 0n && !unlimitedMax && maxAmount !== 0n) {
-      warnings.push(
-        `⚠️ slope is 0, so this limit never refills once spent. It becomes a one-time ` +
-          `allowance of ${maxAmount.toString()} rather than a recurring rate.`
-      )
-    }
+    // A zero slope is NOT warned about. It is an ordinary configuration here:
+    // governance seeds keys with slope 0 routinely, so warning on it would fire
+    // constantly and teach a signer to skip the warning block. The slope value
+    // already says what it means inline.
 
     // --- Fully closing a limit -------------------------------------------
     if (maxAmount === 0n) {
@@ -199,13 +192,13 @@ export class PASConfiguratorDecoder implements CustomDecoder {
       )
     }
 
-    // --- Direction and ceiling cannot come from calldata ------------------
-    warnings.push(
-      `⚠️ Whether this is an increase or a decrease, and whether it is within the ceiling, ` +
-        `cannot be determined from calldata. Both depend on the limit's current on-chain ` +
-        `value. Read getRateLimitData(key) on ${rateLimits}, and getMaxChange / getHop / ` +
-        `getInitRateLimits on the BeamState, before signing.`
-    )
+    // Direction and ceiling belong in the explanation, not the warning block.
+    // They are true of every setRateLimit call, and a warning that always fires
+    // is not a warning.
+    const directionNote =
+      `\n\nDirection and ceiling are not in the calldata. Read getRateLimitData(key) on ` +
+      `${rateLimits}, and getMaxChange / getHop / getInitRateLimits on the BeamState, to ` +
+      `confirm whether this raises or lowers the limit and whether it is within bounds.`
 
     const denominationNote = denomination?.note ? `\n\nNote: ${denomination.note}` : ''
     const scaleNote = denomination
@@ -223,7 +216,17 @@ export class PASConfiguratorDecoder implements CustomDecoder {
       signature: 'setRateLimit(address,bytes32,uint256,uint256)',
       parameters: [
         { name: 'rateLimits', type: 'address', value: rateLimits },
-        { name: 'key', type: 'bytes32', value: keyValue },
+        { name: 'key', type: 'bytes32', value: key },
+        {
+          name: 'key name',
+          type: 'string',
+          value: resolved ? resolved.definition.name : 'UNRESOLVED',
+        },
+        ...(resolved?.operandParts ?? []).map((part, i, all) => ({
+          name: all.length > 1 ? `scoped to (${i + 1} of ${all.length})` : 'scoped to',
+          type: part.address ? 'address' : 'string',
+          value: part.address ? `${part.address}` : part.label,
+        })),
         {
           name: 'maxAmount',
           type: 'uint256',
@@ -252,7 +255,8 @@ export class PASConfiguratorDecoder implements CustomDecoder {
         `  • slope — ${formatRateLimitSlope(slope, denomination, { unlimitedMax })}` +
         summary +
         denominationNote +
-        scaleNote,
+        scaleNote +
+        directionNote,
       warnings,
       // High when the key cannot be named — a signer is told to reject a key
       // they cannot match to the registry — and high when an unlimited key is

@@ -354,6 +354,12 @@ export interface ResolvedRateLimitKey {
    */
   operands: string[]
   /**
+   * The same operands, kept structured so a caller can render each as its own
+   * row and give an address the treatment addresses get. `address` is null for
+   * an operand that is not one, such as a CCTP domain id.
+   */
+  operandParts: Array<{ address: string | null; label: string }>
+  /**
    * Denomination for this specific key, after applying `denominationOperand`
    * against the matched operands. Falls back to the definition's fixed
    * denomination, and is undefined when neither applies.
@@ -455,6 +461,10 @@ function finish(
     ...matched.map(candidate => `${candidate.address} — ${candidate.label}`),
     ...extra,
   ]
+  const operandParts = [
+    ...matched.map(candidate => ({ address: candidate.address as string, label: candidate.label })),
+    ...extra.map(text => ({ address: null, label: text })),
+  ]
 
   // A per-arity denomination wins: the same name can meter a normalised sum at
   // one arity and a raw token amount at another.
@@ -466,7 +476,7 @@ function finish(
     }
   }
 
-  return { definition, shape, operands, denomination }
+  return { definition, shape, operands, operandParts, denomination }
 }
 
 /**
