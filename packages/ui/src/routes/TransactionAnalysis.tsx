@@ -202,7 +202,7 @@ function SourcifyDecodedView({
       {result.status === 'trailing-data' && (
         <div className="bg-amber-50 border-2 border-amber-400 rounded p-3">
           <p className="font-semibold text-amber-900">
-            ⚠️ Extra calldata — {result.trailingBytes}{' '}
+            ⚠️ Extra calldata: {result.trailingBytes}{' '}
             {result.trailingBytes === 1 ? 'byte' : 'bytes'}
           </p>
           <p className="font-mono text-xs text-amber-900 break-all mt-1">{result.trailingData}</p>

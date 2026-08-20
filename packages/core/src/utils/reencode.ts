@@ -90,7 +90,7 @@ export function classifyReencode(raw: Hex, reencoded: Hex): ReencodeVerdict {
 export function trailingDataWarning(verdict: { extraBytes: number; trailing: Hex }): string {
   const plural = verdict.extraBytes === 1 ? 'byte' : 'bytes'
   return (
-    `⚠️ Extra calldata — ${verdict.extraBytes} ${plural} after the decoded parameters: ` +
+    `⚠️ Extra calldata: ${verdict.extraBytes} ${plural} after the decoded parameters, ` +
     `${verdict.trailing}. The parameters are verified; these bytes are not part of them, and ` +
     `they are included in the hash you sign. Confirm they are expected for this contract.`
   )
