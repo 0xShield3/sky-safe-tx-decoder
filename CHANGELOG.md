@@ -2,7 +2,19 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.4.0] — unreleased
+
+Decoder support for the Sky PAS Configurator, a re-encode check that no longer
+conflates two different outcomes, and shorter warning copy throughout.
+
+> **Read this before upgrading.** A call carrying extra bytes past its encoded
+> arguments used to show a red "the parameters cannot be trusted, DO NOT SIGN"
+> banner with the parameters withheld. It now shows the parameters, with an
+> amber warning naming the extra bytes. The parameters were always correct in
+> that case; the old banner said otherwise. See "Trailing calldata" below.
+>
+> `checkReencode` returns a structured result rather than `string[]`. This is a
+> breaking change for anyone importing it from `@shield3/sky-safe-core`.
 
 ### Added
 
@@ -12,23 +24,73 @@ All notable changes to this project are documented here.
   source verified on Sourcify — exact match on creation and runtime bytecode,
   `src/Configurator.sol:Configurator`, solc 0.8.24+commit.e11b9ed9, not a proxy.
 
-  - Rate-limit keys are resolved by recomputing the keccak preimage. An
-    unmatched key renders its full `bytes32` and is reported as unresolved.
-  - `maxAmount` and `slope` are scaled by the key's own denomination. Keys
-    scoped to an operand token are shown as raw integers with the scale stated
-    as undetermined.
+  PAS rate-limit keys are keccak hashes rather than right-padded ASCII, so a
+  raw decoding shows a signer 32 opaque bytes. The decoder resolves a key by
+  recomputing its preimage and matching byte for byte, including the
+  `abi.encode` composition used for operand-scoped keys. A key that does not
+  match is reported as unresolved with its full `bytes32`, never guessed.
+
+  - `maxAmount` and `slope` are scaled by the key's own denomination, which is
+    not the target contract's. A key may also be denominated by one of its own
+    operands, and the same key name may carry different scales at different
+    arities.
   - `slope` is rendered per day as well as per second.
   - `type(uint256).max` renders as `UNLIMITED`.
   - `callControllerAction` surfaces `keccak256(data)`, the value BeamState
-    authorises on. The inner calldata is not decoded.
+    authorises on. The inner calldata is not decoded, because no ABI for an
+    arbitrary controller is trustworthy at that layer.
+  - Direction and ceiling are not claimed. Both depend on the limit's current
+    on-chain value, which is not in the calldata.
 
-  See `packages/core/src/decoders/PAS.md` for the key table, denominations, and
-  scope.
+  Key names and their composition come from `sky-ecosystem/diamond-pau`. See
+  `packages/core/src/decoders/PAS.md` for the key table, denominations, shapes,
+  and scope.
 
-- **PAS contracts added to the Ethereum registry** so they are labelled during
-  review: PAS Configurator, PAS BeamState
-  (`0x1A1879E66547F90bfF87D45A5b0335950E019E02`), and the Grove RateLimits
-  contract (`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1`).
+- **`classifyReencode`** in `packages/core/src/utils/reencode.ts`, a single
+  classifier used by all three re-encode sites: the Safe API path, the custom
+  decoders, and the Sourcify fallback.
+
+- **A daily check for unresolved rate-limit keys.** A scheduled workflow reads
+  every `RateLimitDataSet` event a watched RateLimits contract has emitted, runs
+  each key through the shipped resolver, and opens an issue per unresolved key.
+  Deduplicated against existing issues; reports once per contract above ten
+  findings; exits quietly on a missing secret or an unreachable RPC. Requires
+  `ETH_RPC_URL` in repository secrets.
+
+- **A development-only Safe API mock**, so a constructed transaction can be
+  rendered in the web UI without a queued Safe transaction. Dev-only and absent
+  from the production bundle. Fixtures are JSON files discovered by nonce; see
+  `packages/ui/README.md`.
+
+- **New entries in the Ethereum contract registry**: PAS Configurator, PAS
+  BeamState (`0x1A1879E66547F90bfF87D45A5b0335950E019E02`), Grove RateLimits
+  (`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1`), the JTRSY and BUIDL Grove
+  Basins, the Uniswap v3 AUSD/USDC pool, and AUSD.
+
+### Changed
+
+- **Trailing calldata.** A re-encode check now distinguishes three outcomes
+  rather than two: the decoded parameters reproduce the calldata exactly, they
+  reproduce an exact prefix with bytes remaining, or they differ. The middle
+  case leaves the parameters correct, so it is reported as extra calldata with
+  the bytes shown, not as a decoding that cannot be trusted. `DO NOT SIGN` is
+  reserved for a real mismatch.
+
+  Appending bytes to calldata is always permitted, and an ABI decoder checks
+  that calldata is long enough rather than exactly the right length, so SDKs use
+  the tail for attribution tags. A contract that hashes its own calldata,
+  forwards `msg.data`, or reads the tail deliberately does not ignore it, which
+  is why this still warns.
+
+- **Shorter warning copy.** The undecodable-state message dropped from three
+  sentences to one plus an action. The trailing-calldata warning states the byte
+  count, the bytes, and what to confirm; the mechanism sits behind a disclosure.
+
+### Fixed
+
+- **`DecodeVerificationStatus` gains `trailing-data`.** `verified` continues to
+  mean an exact match at every site, so callers gating on that boolean keep
+  their existing behaviour.
 
 ## [0.3.1] — 2026-08-12
 
