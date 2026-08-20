@@ -138,7 +138,7 @@ function SourcifyDecodedView({
   // when a proxy was followed, otherwise the call target. Linking the proxy
   // instead would point a signer at sources that do not contain this function.
   const abiSource = result.implementation ?? to;
-  if (!result.verified) {
+  if (result.status === 'mismatch') {
     return (
       <div className="bg-red-50 border-2 border-red-400 rounded p-3">
         <p className="font-semibold text-red-900 mb-1">⚠️ Sourcify decoding did not match the raw calldata</p>
@@ -194,6 +194,42 @@ function SourcifyDecodedView({
           </p>
         )}
       </div>
+      {/* Trailing calldata. The parameters below re-encode to the start of this
+          call exactly, so they are shown normally — this is a warning about
+          bytes they do not cover, not a reason to distrust them. Amber, not
+          red: spending the red DO-NOT-SIGN banner on a call whose parameters
+          are correct is what teaches signers to ignore it. */}
+      {result.status === 'trailing-data' && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded p-3">
+          <p className="font-semibold text-amber-900">
+            ⚠️ Extra calldata: {result.trailingBytes}{' '}
+            {result.trailingBytes === 1 ? 'byte' : 'bytes'}
+          </p>
+          <p className="font-mono text-xs text-amber-900 break-all mt-1">{result.trailingData}</p>
+          <p className="text-xs text-amber-900 mt-2">
+            Parameters below are verified. These bytes are not part of them, and they are included
+            in the hash you sign.
+          </p>
+          <p className="text-xs font-semibold text-amber-900 mt-2">
+            Confirm they are expected for this contract.
+          </p>
+          {/* The mechanism is context, not an instruction. A signer mid-review
+              needs the bytes and the action; the explanation is here for the
+              one time they want it. */}
+          <details className="mt-2">
+            <summary className="text-xs text-amber-900 cursor-pointer hover:underline">
+              Why this happens
+            </summary>
+            <p className="text-xs text-amber-900 mt-1">
+              Appending bytes to calldata is always permitted — an ABI decoder checks that calldata
+              is long enough for its parameters, not that it is exactly that length. SDKs use this
+              for attribution tags. Most contracts ignore the extra bytes, but one that hashes its
+              own calldata, forwards <span className="font-mono">msg.data</span>, or reads the tail
+              deliberately (ERC-2771) does not.
+            </p>
+          </details>
+        </div>
+      )}
       {/* Always the call target, never the implementation: a token's identity
           is the address a transfer is sent to. For a proxied token (USDC) the
           proxy is the token; the implementation holds no balances. */}

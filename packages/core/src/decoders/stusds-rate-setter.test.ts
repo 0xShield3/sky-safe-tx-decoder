@@ -65,12 +65,27 @@ describe('StUsdsRateSetterDecoder', () => {
   });
 
   describe('re-encode self-check', () => {
-    it('should flag trailing calldata that the decoder would otherwise ignore', () => {
+    it('should flag trailing calldata as extra bytes, not as a mismatch', () => {
+      const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
+      const warnings = result.main.warnings!.join(' ');
+
+      expect(warnings).toContain('4 bytes');
+      expect(warnings).toContain('0xdeadbeef');
+      expect(result.main.riskLevel).toBe('medium');
+      expect(result.generalWarnings).toBeUndefined();
+    });
+
+    // Every function on this contract takes only static arguments, so there are
+    // no offsets to make non-canonical. Appending bytes is the only way calldata
+    // for these signatures can fail to round-trip, which means `trailing` is the
+    // only reachable non-exact verdict here. Mismatch is covered against the
+    // classifier directly in utils/reencode.test.ts, and end-to-end through a
+    // dynamic argument in spbeam.test.ts.
+    it('should still decode the parameters correctly alongside trailing bytes', () => {
       const result = decoder.decode((SET_CALLDATA + 'deadbeef') as Hex);
 
-      expect(result.main.riskLevel).toBe('high');
-      expect(result.generalWarnings!.join(' ')).toContain('DOES NOT MATCH RAW CALLDATA');
-      expect(result.generalWarnings!.join(' ')).toContain('DO NOT SIGN');
+      expect(result.main.name).toBe('set');
+      expect(result.main.parameters).toHaveLength(4);
     });
   });
 

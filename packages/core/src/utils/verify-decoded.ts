@@ -7,6 +7,7 @@
 
 import { encodeFunctionData, parseAbiParameters, type AbiParameter, type Hex } from 'viem';
 import type { SafeApiDataDecoded } from '../types.js';
+import { classifyReencode, trailingDataWarning } from './reencode.js';
 
 /**
  * Outcome of a verification attempt.
@@ -18,20 +19,30 @@ import type { SafeApiDataDecoded } from '../types.js';
  * raise a red mismatch banner on transactions that were fine, which trains
  * signers to ignore the banner that matters.
  */
-export type DecodeVerificationStatus = 'verified' | 'mismatch' | 'unverifiable';
+export type DecodeVerificationStatus = 'verified' | 'trailing-data' | 'mismatch' | 'unverifiable';
 
 /**
  * Result of verifying decoded data
  */
 export interface DecodeVerificationResult {
-  /** True only when re-encoding reproduced the raw data exactly */
+  /**
+   * True only when re-encoding reproduced the raw data EXACTLY.
+   *
+   * Deliberately stays false for `trailing-data`. Callers that gate on this
+   * boolean keep their existing conservative behaviour, and only code that
+   * handles the new status explicitly treats trailing bytes differently.
+   */
   verified: boolean;
-  /** Which of the three outcomes occurred — see DecodeVerificationStatus */
+  /** Which outcome occurred — see DecodeVerificationStatus */
   status: DecodeVerificationStatus;
   /** Error message if verification did not succeed */
   error?: string;
   /** Re-encoded data (for debugging) */
   reencoded?: Hex;
+  /** Set only for `trailing-data` — the bytes past the end of the arguments. */
+  trailingData?: Hex;
+  /** Set only for `trailing-data` — how many bytes those are. */
+  trailingBytes?: number;
 }
 
 /** Matches an array type and captures the element type, e.g. `uint256[3]` */
@@ -223,7 +234,20 @@ export function verifyDecodedData(rawData: Hex | null, decoded: SafeApiDataDecod
     });
 
     // Compare re-encoded data with raw data
-    const verified = reencoded.toLowerCase() === rawData.toLowerCase();
+    const verdict = classifyReencode(rawData as Hex, reencoded);
+
+    if (verdict.kind === 'trailing') {
+      return {
+        verified: false,
+        status: 'trailing-data',
+        error: trailingDataWarning(verdict),
+        reencoded,
+        trailingData: verdict.trailing,
+        trailingBytes: verdict.extraBytes,
+      };
+    }
+
+    const verified = verdict.kind === 'exact';
 
     return {
       verified,
