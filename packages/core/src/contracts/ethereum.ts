@@ -47,6 +47,20 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
+    address: '0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9',
+    label: 'JTRSY Grove Basin',
+    description:
+      'Grove Basin for JTRSY — an operand of the LIMIT_BASIN_DEPOSIT and LIMIT_BASIN_WITHDRAW rate-limit keys',
+    category: 'protocol',
+  },
+  {
+    address: '0xCBa428fB052B365557DAf52b744DFfF20d5FbEdD',
+    label: 'BUIDL Grove Basin',
+    description:
+      'Grove Basin for BUIDL — an operand of the LIMIT_BASIN_DEPOSIT and LIMIT_BASIN_WITHDRAW rate-limit keys',
+    category: 'protocol',
+  },
+  {
     address: '0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB',
     label: 'MCD_Pause_proxy',
     description: 'Sky governance pause proxy — executes passed governance spells',

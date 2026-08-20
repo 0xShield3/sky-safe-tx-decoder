@@ -17,6 +17,7 @@ import {
   formatRateLimitSlope,
   isUnlimitedAmount,
   rateLimitBaseHash,
+  unsearchableShapeReason,
   resolveRateLimitKey,
 } from './pas-common.js';
 
@@ -67,21 +68,43 @@ describe('RATE_LIMIT_KEYS', () => {
     }
   });
 
-  it('should record LIMIT_USDE_MINT as USDC-denominated, not USDe', () => {
-    // prepareUSDeMint(uint256 usdcAmount) rate-limits the USDC it approves to
-    // Ethena. Reading the key name and assuming 18 decimals misreads the
-    // amount by a factor of 10^12.
-    const key = RATE_LIMIT_KEYS.find(k => k.name === 'LIMIT_USDE_MINT');
-    expect(key!.denomination).toEqual({
-      symbol: 'USDC',
-      decimals: 6,
-      note: expect.stringContaining('not USDe'),
-    });
+  it('should record the PSM swap keys as USDC-denominated, not USDS', () => {
+    // Both PSM facet swaps take a `usdcAmount`, in either direction. Reading
+    // either key name and assuming 18 decimals misreads the amount by 10^12.
+    for (const name of ['LIMIT_USDS_TO_USDC', 'LIMIT_USDC_TO_USDS']) {
+      const key = RATE_LIMIT_KEYS.find(k => k.name === name);
+      expect(key!.denomination!.symbol).toBe('USDC');
+      expect(key!.denomination!.decimals).toBe(6);
+    }
   });
 
-  it('should record LIMIT_OTC_SWAP as 18-decimal normalised regardless of asset', () => {
-    const key = RATE_LIMIT_KEYS.find(k => k.name === 'LIMIT_OTC_SWAP');
-    expect(key!.denomination!.decimals).toBe(18);
+  it('should carry diamond-pau shapes, not spark-alm-controller ones', () => {
+    // These three differ between the two repositories for the same key name.
+    // Taking spark's shape yields a hash that matches nothing on a Grove PAU.
+    const shapeOf = (name: string) => RATE_LIMIT_KEYS.find(k => k.name === name)!.shape;
+
+    expect(shapeOf('LIMIT_4626_DEPOSIT')).toBe('address+address');
+    expect(shapeOf('LIMIT_AAVE_DEPOSIT')).toBe('address+address+address');
+    expect(shapeOf('LIMIT_UNISWAP_V4_SWAP')).toBe('address+bytes32');
+  });
+
+  it('should split the operations spark-alm-controller combines', () => {
+    // spark reuses LIMIT_USDS_MINT for burning and LIMIT_USDS_TO_USDC for both
+    // swap directions. diamond-pau gives each its own key, and both of the
+    // extra keys are live on Grove's RateLimits.
+    for (const name of ['LIMIT_USDS_BURN', 'LIMIT_USDC_TO_USDS']) {
+      expect(RATE_LIMIT_KEYS.find(k => k.name === name)).toBeDefined();
+    }
+  });
+
+  it('should denominate the Basin keys by their asset operand', () => {
+    // BasinFacet rate-limits `amount` of `asset`, and `asset` is operand 0.
+    for (const name of ['LIMIT_BASIN_DEPOSIT', 'LIMIT_BASIN_WITHDRAW']) {
+      const key = RATE_LIMIT_KEYS.find(k => k.name === name)!;
+      expect(key.shape).toBe('address+address');
+      expect(key.denominationOperand).toBe(0);
+      expect(key.denomination).toBeUndefined();
+    }
   });
 
   it('should leave operand-scoped keys without a denomination', () => {
@@ -105,16 +128,29 @@ describe('resolveRateLimitKey', () => {
   it('should resolve an address-scoped key by recomputing the preimage', () => {
     const key = keccak256(
       encodeAbiParameters(parseAbiParameters('bytes32, address'), [
-        rateLimitBaseHash('LIMIT_4626_DEPOSIT'),
+        rateLimitBaseHash('LIMIT_4626_WITHDRAW'),
         SUSDS,
       ])
     );
 
     const resolved = resolveRateLimitKey(key, CANDIDATES);
 
-    expect(resolved!.definition.name).toBe('LIMIT_4626_DEPOSIT');
+    expect(resolved!.definition.name).toBe('LIMIT_4626_WITHDRAW');
     expect(resolved!.operands[0]).toContain(SUSDS);
     expect(resolved!.operands[0]).toContain('sUSDS');
+  });
+
+  it('should not resolve a key built with the wrong shape for its name', () => {
+    // LIMIT_4626_DEPOSIT is keyed by two addresses in diamond-pau. Building it
+    // spark-style with one address must fail to resolve rather than match.
+    const sparkStyle = keccak256(
+      encodeAbiParameters(parseAbiParameters('bytes32, address'), [
+        rateLimitBaseHash('LIMIT_4626_DEPOSIT'),
+        SUSDS,
+      ])
+    );
+
+    expect(resolveRateLimitKey(sparkStyle, CANDIDATES)).toBeNull();
   });
 
   it('should resolve a two-address key in the right operand order', () => {
@@ -173,6 +209,70 @@ describe('resolveRateLimitKey', () => {
       expect(resolved).not.toBeNull();
       expect(rateLimitBaseHash(resolved!.definition.name)).toBe(key);
     }
+  });
+});
+
+describe('resolveRateLimitKey — Grove\'s live key set', () => {
+  // Every rate-limit key set on Grove's RateLimits
+  // 0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1, read from chain on 2026-08-20.
+  // If any stops resolving, a signer is left matching a bare bytes32 by hand.
+  const GROVE_CANDIDATES = [
+    { address: '0xdC035D45d973E3EC169d2276DDab16f1e407384F' as `0x${string}`, label: 'USDS', decimals: 18 },
+    { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as `0x${string}`, label: 'USDC', decimals: 6 },
+    { address: '0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9' as `0x${string}`, label: 'JTRSY Grove Basin' },
+    { address: '0xCBa428fB052B365557DAf52b744DFfF20d5FbEdD' as `0x${string}`, label: 'BUIDL Grove Basin' },
+  ];
+
+  const LIVE: Array<[Hex, string, string | undefined]> = [
+    ['0xcb0537d5e5dba65a8edbac12555995860e5b8e1b70996011edb1ca8173e56d3c', 'LIMIT_USDS_MINT', 'USDS'],
+    ['0x844d35ae585cfdeed0a77b7724286a1d4b5718bf8663d85e55396062b1cbe38c', 'LIMIT_USDS_BURN', 'USDS'],
+    ['0x00d4cb8ac2838f11d95b0136a919a13b994f920024aba35eee16dc433c65851c', 'LIMIT_USDS_TO_USDC', 'USDC'],
+    ['0x87835797fec2ad9575bc1a7035e3c27b8a8b7db2c3d7118513baf081b3af06b3', 'LIMIT_USDC_TO_USDS', 'USDC'],
+    ['0x44ad4f925dffddd260f6ba5813208bf35b11b254e79611cbc8443c1504f68e68', 'LIMIT_BASIN_DEPOSIT', 'USDS'],
+    ['0x1a86f9199a894b97364bd328ccf0a718073f81ec34f7febd5303937f8cacd73c', 'LIMIT_BASIN_DEPOSIT', 'USDS'],
+    ['0x0d8db6f922b464d5eb8ac718bef62b82b05d9bd0ea5dafd09ccd0461d4d98e12', 'LIMIT_BASIN_WITHDRAW', 'USDS'],
+    ['0xdfd7309f2f1b84a83ada77042d91e79a9cb3daf3ecd4c5335dede65b95c888f5', 'LIMIT_BASIN_WITHDRAW', 'USDC'],
+    ['0xac6b1419c7365d44c458289fbd4b91c1913427601113863b9293594a6885baff', 'LIMIT_BASIN_WITHDRAW', 'USDS'],
+    ['0x85d9f9cee2ba35ec7240969418f2edcc157ced3dfc6c1b85aa986a1b3026d4b7', 'LIMIT_BASIN_WITHDRAW', 'USDC'],
+  ];
+
+  it('should resolve all ten', () => {
+    for (const [key, name] of LIVE) {
+      const resolved = resolveRateLimitKey(key, GROVE_CANDIDATES);
+      expect(resolved, `unresolved: ${key}`).not.toBeNull();
+      expect(resolved!.definition.name).toBe(name);
+    }
+  });
+
+  it('should denominate each by the asset it actually counts', () => {
+    // The same key name carries different decimals depending on its asset
+    // operand: LIMIT_BASIN_WITHDRAW is USDS on one Basin and USDC on another.
+    for (const [key, , symbol] of LIVE) {
+      const resolved = resolveRateLimitKey(key, GROVE_CANDIDATES);
+      expect(resolved!.denomination?.symbol, `wrong denomination for ${key}`).toBe(symbol);
+    }
+  });
+
+  it('should reproduce each key exactly from the name it reports', () => {
+    // A resolution is only meaningful if the reported preimage regenerates the
+    // key. Bare keys are checked directly here.
+    for (const [key, name] of LIVE) {
+      const resolved = resolveRateLimitKey(key, GROVE_CANDIDATES)!;
+      if (resolved.definition.shape !== 'bare') continue;
+      expect(rateLimitBaseHash(name)).toBe(key);
+    }
+  });
+});
+
+describe('unsearchableShapeReason', () => {
+  it('should return null for a shape the resolver can search', () => {
+    expect(unsearchableShapeReason('bare')).toBeNull();
+    expect(unsearchableShapeReason('address+address')).toBeNull();
+  });
+
+  it('should explain why an unbounded shape cannot be searched', () => {
+    expect(unsearchableShapeReason('address+bytes32')).toContain('unbounded');
+    expect(unsearchableShapeReason('address+uint16+address')).toContain('unbounded');
   });
 });
 

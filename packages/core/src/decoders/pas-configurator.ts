@@ -73,6 +73,10 @@ function operandCandidates(network: string): KeyOperandCandidate[] {
   return contracts.map(contract => ({
     address: contract.address as Address,
     label: contract.label,
+    // Carried so a key that denominates its amount in one of its operands can
+    // scale it. The decimals come from this repository's hardcoded table, never
+    // from a chain call.
+    decimals: contract.decimals,
   }))
 }
 
@@ -136,7 +140,10 @@ export class PASConfiguratorDecoder implements CustomDecoder {
     const [rateLimits, key, maxAmount, slope] = args as [Address, Hex, bigint, bigint]
 
     const resolved = resolveRateLimitKey(key, operandCandidates(this.network))
-    const denomination = resolved?.definition.denomination
+    // Taken from the resolution, not the definition: a key may denominate its
+    // amount in one of its own operands (Basin counts units of `asset`), which
+    // is only known once the operands have been recovered by preimage.
+    const denomination = resolved?.denomination
     const warnings: string[] = []
 
     // --- The key ---------------------------------------------------------

@@ -40,20 +40,31 @@ PAS rate-limit keys are keccak hashes, not right-padded ASCII. `bytes32ToLabel` 
 comparing the result to the key byte for byte. A name is reported only on an exact hash
 match.
 
-Key names come from `sparkdotfi/spark-alm-controller` — `src/MainnetController.sol`,
-`src/ForeignController.sol`, and the libraries under `src/libraries/`. Composition follows
-`src/RateLimitHelpers.sol`:
+Key names come from **`sky-ecosystem/diamond-pau`** — the facets under `src/facets/` and the
+helper library `src/libraries/RateLimitHelpers.sol`. 66 names are recorded.
 
-| Shape | Construction | Example |
+> **Not `sparkdotfi/spark-alm-controller`.** The two share a naming convention and differ in
+> ways that silently break resolution. diamond-pau splits operations spark combines
+> (`LIMIT_USDS_BURN`, `LIMIT_USDC_TO_USDS`), and uses different **shapes** for the same name:
+> `LIMIT_4626_DEPOSIT` is keyed by two addresses here and one in spark, `LIMIT_AAVE_DEPOSIT`
+> by three. A wrong shape hashes to nothing, so the failure mode is an unresolved key rather
+> than a wrong name — safe, but still a failure.
+
+| Shape | Construction | Searchable |
 | --- | --- | --- |
-| bare | `keccak256(name)` | `LIMIT_USDS_MINT` |
-| address | `keccak256(abi.encode(base, a))` | `LIMIT_4626_DEPOSIT` × vault |
-| address + address | `keccak256(abi.encode(base, a, b))` | `LIMIT_ASSET_TRANSFER` |
-| bytes32 | `keccak256(abi.encode(base, a))` | `LIMIT_UNISWAP_V4_SWAP` × pool id |
-| uint32 | `keccak256(abi.encode(base, a))` | `LIMIT_USDC_TO_DOMAIN` × domain |
-| address + uint32 | `keccak256(abi.encode(base, a, b))` | `LIMIT_LAYERZERO_TRANSFER` |
+| bare | `keccak256(name)` | yes |
+| address | `keccak256(abi.encode(base, a))` | yes |
+| address + address | `keccak256(abi.encode(base, a, b))` | yes |
+| uint32 | `keccak256(abi.encode(base, a))` | yes, bounded range |
+| address + address + address | `keccak256(abi.encode(base, a, b, c))` | no |
+| address + bytes32 | `keccak256(abi.encode(base, a, b))` | no |
+| address + uint16 + address | `keccak256(abi.encode(base, a, b, c))` | no |
+| address + address + bytes32 + uint32 | `keccak256(abi.encode(base, a, b, c, d))` | no |
 
-Candidate operands for composite keys come from `CONTRACTS_BY_NETWORK` in
+Unsearchable shapes are declared so an unresolved key can be described accurately, but their
+operand spaces cannot be enumerated. `unsearchableShapeReason` supplies the reason.
+
+Candidate operands for searchable composite keys come from `CONTRACTS_BY_NETWORK` in
 `packages/core/src/contracts/`. The candidate list bounds which keys can be resolved. It
 cannot cause an incorrect name to be shown.
 
@@ -65,30 +76,31 @@ resolved, and sets `riskLevel: 'high'`.
 Add the operand address to the network's file in `packages/core/src/contracts/` with a
 label. No decoder change is needed.
 
-Do not add a name to `RATE_LIMIT_KEYS` without the exact preimage string from
-`spark-alm-controller` source. The hash is computed from the name at runtime, so an
-approximate name yields a hash that matches nothing.
+Do not add a name to `RATE_LIMIT_KEYS` without the exact preimage string from **diamond-pau**
+facet source. The hash is computed from the name at runtime, so an approximate name yields a
+hash that matches nothing.
 
 ## Amount denomination
 
 `maxAmount` and `slope` are denominated by the rate-limit key, not by the call target. A
-denomination is recorded only where the controller source fixes it.
+denomination is recorded only where the facet source has been read.
 
 | Key | Denomination | Source |
 | --- | --- | --- |
-| `LIMIT_USDS_MINT` | USDS, 18 | `mintUSDS(uint256 usdsAmount)` |
-| `LIMIT_USDS_TO_USDC` | USDC, 6 | source note: 1e6 precision, both swap directions |
-| `LIMIT_USDE_MINT` | USDC, 6 | `prepareUSDeMint(uint256 usdcAmount)` |
-| `LIMIT_USDE_BURN` | USDe, 18 | `prepareUSDeBurn(uint256 usdeAmount)` |
-| `LIMIT_SUSDE_COOLDOWN` | USDe, 18 | rate-limited on assets, not sUSDe shares |
-| `LIMIT_SUPERSTATE_SUBSCRIBE` | USDC, 6 | `subscribeSuperstate(uint256 usdcAmount)` |
-| `LIMIT_USDC_TO_CCTP` | USDC, 6 | `transferUSDCToCCTP(uint256 usdcAmount, uint32)` |
-| `LIMIT_USDC_TO_DOMAIN` | USDC, 6 | `transferUSDCToCCTP(uint256 usdcAmount, uint32)` |
-| `LIMIT_WSTETH_DEPOSIT` | wstETH, 18 | deposit amount |
-| `LIMIT_WSTETH_REQUEST_WITHDRAW` | stETH, 18 | rate-limited on `getStETHByWstETH(...)` |
-| `LIMIT_WEETH_DEPOSIT` | WETH, 18 | deposit path unwraps WETH before eETH |
-| `LIMIT_WEETH_REQUEST_WITHDRAW` | eETH, 18 | rate-limited on `eETHAmount` |
-| `LIMIT_OTC_SWAP` | 18, all assets | `sent18 = amount * 1e18 / 10 ** decimals(asset)` |
+| `LIMIT_USDS_MINT` | USDS, 18 | `mint(uint256 usdsAmount)` |
+| `LIMIT_USDS_BURN` | USDS, 18 | `burn(uint256 usdsAmount)` |
+| `LIMIT_USDS_TO_USDC` | USDC, 6 | `swapUSDSToUSDC(uint256 usdcAmount)` |
+| `LIMIT_USDC_TO_USDS` | USDC, 6 | `swapUSDCToUSDS(uint256 usdcAmount)` |
+| `LIMIT_BASIN_DEPOSIT` | operand 0 | `deposit` rate-limits `amount` of `asset` |
+| `LIMIT_BASIN_WITHDRAW` | operand 0 | `withdraw` rate-limits `assetsWithdrawn` of `asset` |
+
+The two Basin keys use `denominationOperand: 0`. The facet counts units of `asset`, and
+`asset` is the first operand, so a resolved operand 0 that is a known token in this
+repository's registry supplies the decimals. That is source-backed, not inferred from the key
+name — and it is why the same key name renders as USDS on one Basin and USDC on another.
+
+Every other key deliberately carries no denomination. Its scale follows a token this table
+does not record.
 
 Keys scoped to an operand token carry no denomination. Their amount may be denominated in
 either an ERC-4626 vault's shares or its underlying asset depending on the entry point, and
@@ -148,15 +160,24 @@ spaces are too large to search.
 
 ## Test fixtures
 
-Fixtures in `pas-configurator.test.ts` use values read from the Grove RateLimits contract
-`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1` on 2026-08-17. Two keys were set at that time:
+Fixtures use values read from the Grove RateLimits contract
+`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1` on 2026-08-20. Ten keys are set:
 
-| Key | maxAmount | slope |
+| Key | Operands | maxAmount |
 | --- | --- | --- |
-| `LIMIT_USDS_MINT` | `5000000000000000000000000` (5,000,000 USDS) | `57870370370370370370` |
-| `LIMIT_USDS_TO_USDC` | `5000000000000` (5,000,000 USDC) | `57870370` |
+| `LIMIT_USDS_MINT` | bare | 5,000,000 USDS |
+| `LIMIT_USDS_BURN` | bare | 5,000,000 USDS |
+| `LIMIT_USDS_TO_USDC` | bare | 5,000,000 USDC |
+| `LIMIT_USDC_TO_USDS` | bare | 5,000,000 USDC |
+| `LIMIT_BASIN_DEPOSIT` | USDS, JTRSY Basin | 5,000,000 USDS |
+| `LIMIT_BASIN_DEPOSIT` | USDS, BUIDL Basin | 5,000,000 USDS |
+| `LIMIT_BASIN_WITHDRAW` | USDS, JTRSY Basin | UNLIMITED |
+| `LIMIT_BASIN_WITHDRAW` | USDC, JTRSY Basin | UNLIMITED |
+| `LIMIT_BASIN_WITHDRAW` | USDS, BUIDL Basin | UNLIMITED |
+| `LIMIT_BASIN_WITHDRAW` | USDC, BUIDL Basin | UNLIMITED |
 
-The pair covers an 18-decimal and a 6-decimal denomination at the same nominal size.
+All ten `bytes32` values are pinned in `pas-common.test.ts`, which asserts the resolver
+returns a name and the correct denomination for every one.
 
-Base key hashes are pinned as literals in `pas-common.test.ts`. The resolver computes them
-from the name string, so a rename would otherwise stop a key resolving with no test failure.
+Base key hashes are also pinned as literals. The resolver computes them from the name string,
+so a rename would otherwise stop a key resolving with no test failure.
