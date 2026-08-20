@@ -1,0 +1,53 @@
+name: Unresolved rate-limit keys
+
+# Rate-limit keys are keccak hashes, and the decoder can only name one whose
+# preimage it can reconstruct. When governance seeds a key this build does not
+# know, it renders as an unresolved bytes32 and the transaction is marked high
+# risk. Correct, but nothing surfaces that the table needs updating.
+#
+# This checks the decoder against what is actually set on chain and opens an
+# issue per unresolved key. It never fails the run: an unreachable RPC or a
+# missing secret exits quietly, because a check that goes red on infrastructure
+# noise is a check people mute.
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, off the hour to avoid the scheduling spike
+  workflow_dispatch: # so it can be run on demand after a spell
+
+# Least privilege: read the tree, write issues. Nothing else.
+permissions:
+  contents: read
+  issues: write
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The script calls the real resolver, so core has to be built first. This
+      # is deliberate: it tests the shipped decoder, not a reimplementation of
+      # its logic that could drift from it.
+      - name: Build core
+        run: pnpm --filter @shield3/sky-safe-core build
+
+      - name: Check for unresolved keys
+        env:
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-rate-limit-keys.mjs --issues
