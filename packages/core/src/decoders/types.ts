@@ -24,6 +24,23 @@ export interface DecodedFunction {
   /** Human-readable explanation of what this function does */
   explanation: string
 
+  /**
+   * The contract this call is addressed to.
+   *
+   * Set by decoders that unpack a batch, where each nested call has its own
+   * target. A renderer shows it on the call itself, so the raw and the decoded
+   * halves of one call stay together instead of being listed twice.
+   */
+  target?: Address
+
+  /**
+   * The complete calldata of this call, exactly as signed.
+   *
+   * Set alongside `target` for a nested call. Always the full byte sequence — a
+   * renderer may put it behind a disclosure, and must never shorten it.
+   */
+  rawCalldata?: Hex
+
   /** Warnings specific to this function */
   warnings?: string[]
 

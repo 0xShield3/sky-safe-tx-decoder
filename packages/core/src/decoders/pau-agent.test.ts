@@ -20,11 +20,20 @@ import type { Address, Hex } from 'viem';
 import { encodeAbiParameters, encodeFunctionData, parseAbi } from 'viem';
 import { decodeMultiSend } from '../security/multisend-decoder.js';
 import { PAUAdministeredAgentDecoder, createPauAgentDecoders } from './pau-agent.js';
+import { isPauFrozenTableCaveat } from './pau-common.js';
 
 const GROVE_AGENT = '0xdBD17832df0e57b1732cE1C84c652E820e549BAa';
 const GROVE_CONTROLLER = '0xbf83F5974B932c7D842254042717D6A2706CE5eE';
 const UNISWAP_V3_FACET = '0x445D9Dc752F269Be48250f1A180CAC4c61cE4bab';
 const AUSD_USDC_POOL = '0xbAFeAd7c60Ea473758ED6c6021505E8BBd7e8E5d';
+
+const ALL_FIXTURES = [
+  'pau-usds-mint-basin-deposit',
+  'pau-basin-withdraw-psm-burn',
+  'pau-uniswap-v3-swap',
+  'pau-uniswap-v3-add-liquidity',
+  'pau-uniswap-v3-remove-liquidity',
+];
 
 const decoder = new PAUAdministeredAgentDecoder({
   address: GROVE_AGENT,
@@ -157,32 +166,56 @@ describe('the five real Grove transactions', () => {
     expect(paramValue(remove, 'liquidity')).toBe('1000223324856');
   });
 
-  it('names the facet, the integration and both selectors on every call', () => {
-    for (const name of [
-      'pau-usds-mint-basin-deposit',
-      'pau-basin-withdraw-psm-burn',
-      'pau-uniswap-v3-swap',
-      'pau-uniswap-v3-add-liquidity',
-      'pau-uniswap-v3-remove-liquidity',
-    ]) {
+  it('names the Controller, facet, integration and both selectors on every call', () => {
+    for (const name of ALL_FIXTURES) {
       const decoded = decoder.decode(agentCallFromFixture(name));
       for (const call of decoded.nested!) {
-        expect(paramValue(call, 'Controller')).toBe(GROVE_CONTROLLER);
-        expect(paramValue(call, 'facet')).toMatch(/^0x[0-9a-fA-F]{40}$/);
-        expect(paramValue(call, 'call selector (sent)')).toMatch(/^0x[0-9a-f]{8}$/);
-        expect(paramValue(call, 'delegate selector (executed)')).toMatch(/^0x[0-9a-f]{8}$/);
-        expect(paramValue(call, 'call selector (sent)')).not.toBe(
-          paramValue(call, 'delegate selector (executed)')
-        );
-        expect(paramValue(call, 'integration id')).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(call.explanation).toContain(`Controller — ${GROVE_CONTROLLER}`);
+        expect(call.explanation).toMatch(/Facet — 0x[0-9a-fA-F]{40} \(\w+\)/);
+        expect(call.explanation).toMatch(/Call selector \(sent\) — 0x[0-9a-f]{8}/);
+        expect(call.explanation).toMatch(/Delegate selector \(executed\) — 0x[0-9a-f]{8}/);
+        expect(call.explanation).toMatch(/Integration id — 0x[0-9a-f]{64}/);
+        expect(call.explanation).toContain('ETH value — 0 wei');
       }
     }
   });
 
-  it('states the block the dispatch table was frozen at', () => {
-    const decoded = decoder.decode(agentCallFromFixture('pau-uniswap-v3-swap'));
-    expect(decoded.nested![0]!.explanation).toMatch(/frozen at block \d+ \(\d{4}-\d{2}-\d{2}\)/);
-    expect(decoded.nested![0]!.explanation).toContain('not verified against the chain');
+  it('carries each call\'s target and complete calldata on the call itself', () => {
+    for (const name of ALL_FIXTURES) {
+      const agentCall = agentCallFromFixture(name);
+      const decoded = decoder.decode(agentCall);
+      for (const call of decoded.nested!) {
+        expect(call.target).toBe(GROVE_CONTROLLER);
+        expect(call.rawCalldata).toMatch(/^0x[0-9a-f]+$/);
+        // The complete bytes, not a prefix: the batch calldata contains them.
+        expect(agentCall).toContain(call.rawCalldata!.slice(2));
+      }
+    }
+  });
+
+  it('states the frozen block once for the batch, never on a call', () => {
+    const decoded = decoder.decode(agentCallFromFixture('pau-basin-withdraw-psm-burn'));
+
+    const caveats = decoded.main.warnings!.filter(isPauFrozenTableCaveat);
+    expect(caveats).toHaveLength(1);
+    expect(caveats[0]).toMatch(/frozen at block \d+ \(\d{4}-\d{2}-\d{2}\)/);
+
+    // Three calls, one caveat. Repeating it under each buried the arguments,
+    // and the web UI drops it in favour of its own live-check banner.
+    expect(decoded.nested).toHaveLength(3);
+    for (const call of decoded.nested!) {
+      expect(call.explanation).not.toContain('frozen at block');
+      expect(call.warnings ?? []).not.toContain(expect.stringContaining('frozen at block'));
+    }
+  });
+
+  it('does not repeat the selector-swap mechanics under every call', () => {
+    // The two selector bullets directly above said it already.
+    const decoded = decoder.decode(agentCallFromFixture('pau-basin-withdraw-psm-burn'));
+    for (const call of decoded.nested!) {
+      expect(call.explanation).not.toContain('does not execute');
+      expect(call.explanation).not.toContain('delegatecalls');
+    }
   });
 
   it('never elides an identifier', () => {
@@ -226,7 +259,8 @@ describe('a Controller this build holds no table for', () => {
   it('renders the target, the selector and the full calldata', () => {
     expect(call.explanation).toContain(UNKNOWN_CONTROLLER);
     expect(call.explanation).toContain('0xa5b7e02d');
-    expect(call.explanation).toContain(
+    expect(call.target).toBe(UNKNOWN_CONTROLLER);
+    expect(call.rawCalldata).toBe(
       '0xa5b7e02d000000000000000000000000000000000000000000000000000000000000002a'
     );
   });
@@ -303,7 +337,10 @@ describe('setMaxSlippage rendering', () => {
     );
     const call = decoded.nested![0]!;
     expect(call.signature).toBe('setMaxSlippage(address,uint256)');
-    expect(paramValue(call, 'facet contract')).toBe('AaveFacet');
+    expect(call.explanation).toContain('on AaveFacet.');
+    // A different facet from the UniswapV3Facet entry above, under the same
+    // delegate selector 0x73d76dbe.
+    expect(call.explanation).not.toContain(UNISWAP_V3_FACET);
     expect(paramValue(call, 'maxSlippage')).toContain('at least 99.5% of expected');
     expect(call.explanation).toContain('keyed by the aToken market');
   });
@@ -376,7 +413,7 @@ describe('batch-level checks', () => {
     expect(decoded.main.warnings!.join('\n')).toMatch(/Extra|trailing/i);
   });
 
-  it('lists every call target, selector and value on the batch itself', () => {
+  it('carries no per-call rows, so a call is never listed twice', () => {
     const decoded = decoder.decode(
       batchCall([
         {
@@ -389,10 +426,14 @@ describe('batch-level checks', () => {
         },
       ])
     );
-    expect(paramValue(decoded.main, 'call 1 of 2 — target')).toBe(GROVE_CONTROLLER);
-    expect(paramValue(decoded.main, 'call 1 of 2 — call selector')).toBe('0xa5b7e02d');
-    expect(paramValue(decoded.main, 'call 2 of 2 — call selector')).toBe('0x48d63a13');
     expect(decoded.main.signature).toBe('batchCall(address[],bytes[],uint256[])');
+    // Only the count. Every other fact about a call belongs to that call.
+    expect(decoded.main.parameters.map((p) => p.name)).toEqual(['calls']);
+    expect(String(decoded.main.parameters[0]!.value)).toBe('2');
+    expect(decoded.nested!.map((call) => call.rawCalldata)).toEqual([
+      '0xa5b7e02d000000000000000000000000000000000000000000000000000000000000002a',
+      '0x48d63a13000000000000000000000000000000000000000000000000000000000000002a',
+    ]);
   });
 
   it('exposes only batchCall as supported', () => {

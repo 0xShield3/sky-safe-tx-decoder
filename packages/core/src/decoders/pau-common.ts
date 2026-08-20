@@ -182,6 +182,35 @@ export function describePauDispatchMismatch(mismatch: PauDispatchMismatch): stri
   )
 }
 
+// --- The frozen-table caveat ------------------------------------------------
+
+/**
+ * Opening words of the caveat a decoding carries when nothing has checked the
+ * frozen dispatch table against the chain.
+ *
+ * Exported so a surface that runs the live check can recognise the exact
+ * warning and drop it. The web UI does: its verification banner reports
+ * freshness in all three states, and leaving this beside a green banner would
+ * contradict it. The CLI keeps the caveat, because it makes no network calls
+ * and has no banner.
+ */
+export const PAU_FROZEN_TABLE_CAVEAT_PREFIX =
+  'Function names come from a dispatch table frozen at block '
+
+/** The caveat for one frozen table, with its block and date. */
+export function pauFrozenTableCaveat(frozenAtBlock: number, frozenAtDate: string): string {
+  return (
+    `${PAU_FROZEN_TABLE_CAVEAT_PREFIX}${frozenAtBlock} (${frozenAtDate}). Nothing here checked ` +
+    `it against the chain. A call selector rewired since that block decodes to the same ` +
+    `argument types under a different function name.`
+  )
+}
+
+/** True for a warning produced by {@link pauFrozenTableCaveat}. */
+export function isPauFrozenTableCaveat(warning: string): boolean {
+  return warning.includes(PAU_FROZEN_TABLE_CAVEAT_PREFIX)
+}
+
 // --- Domain rendering -------------------------------------------------------
 
 const WAD = 10n ** 18n
@@ -393,7 +422,12 @@ export interface PauAmountReading {
    * integer is always present in it when it is not null.
    */
   scaled: string | null
-  /** Why no scale is applied, where that is worth saying. Null otherwise. */
+  /**
+   * Why no scale is applied, as a bare clause naming what the value counts.
+   * Null where the parameter is not a token amount at all — a `deadline` is a
+   * unix timestamp and a `tokenId` is a position identifier, and telling a
+   * signer their scale is undetermined is noise.
+   */
   note: string | null
 }
 
@@ -422,7 +456,7 @@ export function readPauAmount(
     const unscaled = PAU_UNSCALED_AMOUNT[key]?.[paramIndex]
     return {
       scaled: null,
-      note: unscaled ? `raw integer; ${unscaled}, so the scale is undetermined` : null,
+      note: unscaled ?? null,
     }
   }
 
@@ -431,7 +465,7 @@ export function readPauAmount(
     if (decimals === null) {
       return {
         scaled: null,
-        note: `raw integer; ${denomination.symbol} is not in this build's contract registry, so the scale is undetermined`,
+        note: `counts ${denomination.symbol}, which is not in this build's contract registry`,
       }
     }
     return {
@@ -446,7 +480,7 @@ export function readPauAmount(
   if (typeof operand !== 'string') {
     return {
       scaled: null,
-      note: `raw integer; ${denomination.note}, which could not be read`,
+      note: `is ${denomination.note}, which could not be read`,
     }
   }
 
@@ -455,8 +489,7 @@ export function readPauAmount(
     return {
       scaled: null,
       note:
-        `raw integer; ${denomination.note} — ${operand} is not a known token in this build, ` +
-        `so the scale is undetermined`,
+        `is ${denomination.note}, and ${operand} is not a known token in this build`,
     }
   }
 

@@ -13,6 +13,7 @@ import {
   pauVerificationTargets,
   verifyPauDispatches,
   describePauDispatchMismatch,
+  isPauFrozenTableCaveat,
   decodeMultiSend,
   isMultiSend,
   verifyDecodedData,
@@ -133,6 +134,19 @@ function DecodedParamList({
  * pane rendered `nested`, and a batch reached through a MultiSend showed its
  * summary with none of its calls.
  */
+/**
+ * The warnings a decoding carries, minus the PAU frozen-table caveat.
+ *
+ * That caveat says the dispatch table was not checked against the chain. It is
+ * correct for the CLI, which makes no network calls, and wrong here: this app
+ * always runs the live check and reports the outcome in its own banner, in all
+ * three states. Left in place it would sit under a green "verified just now"
+ * banner and contradict it.
+ */
+function withoutPauFrozenCaveat(warnings: string[] | undefined): string[] {
+  return (warnings ?? []).filter((warning) => !isPauFrozenTableCaveat(warning));
+}
+
 function NestedCallList({ calls }: { calls: DecodedFunction[] }) {
   if (calls.length === 0) return null;
   return (
@@ -167,6 +181,20 @@ function NestedCallList({ calls }: { calls: DecodedFunction[] }) {
                   </div>
                 ))}
               </div>
+            )}
+            {/* This call's own bytes, next to the decoding of those same bytes.
+                Behind a disclosure because a signer reads the decoding first
+                and the hex only to check it — never shortened, and never
+                summarised. */}
+            {call.rawCalldata && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer text-gray-600 hover:underline">
+                  Raw calldata
+                </summary>
+                <div className="mt-1 bg-white p-2 rounded border font-mono break-all text-gray-700">
+                  {call.rawCalldata}
+                </div>
+              </details>
             )}
           </div>
         ))}
@@ -1283,11 +1311,11 @@ export default function TransactionAnalysis() {
                     </div>
                   )}
 
-                  {customDecoded.main.warnings && customDecoded.main.warnings.length > 0 && (
+                  {withoutPauFrozenCaveat(customDecoded.main.warnings).length > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                       <p className="font-semibold text-yellow-900 mb-2">⚠️ Function-Specific Warnings:</p>
                       <ul className="text-sm space-y-1">
-                        {customDecoded.main.warnings.map((warning, i) => (
+                        {withoutPauFrozenCaveat(customDecoded.main.warnings).map((warning, i) => (
                           <li key={i} className="text-yellow-800">
                             • {warning}
                           </li>
@@ -1417,9 +1445,9 @@ export default function TransactionAnalysis() {
                               ))}
                             </div>
                           )}
-                          {item.decoded.main.warnings && item.decoded.main.warnings.length > 0 && (
+                          {withoutPauFrozenCaveat(item.decoded.main.warnings).length > 0 && (
                             <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded p-2">
-                              {item.decoded.main.warnings.map((warning, i) => (
+                              {withoutPauFrozenCaveat(item.decoded.main.warnings).map((warning, i) => (
                                 <p key={i} className="text-xs text-yellow-800 break-all">
                                   ⚠️ {warning}
                                 </p>

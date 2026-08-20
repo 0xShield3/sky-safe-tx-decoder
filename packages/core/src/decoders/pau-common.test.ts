@@ -105,8 +105,9 @@ describe('readPauAmount', () => {
       []
     );
     expect(reading.scaled).toBeNull();
-    expect(reading.note).toContain('counts units of tokenIn');
-    expect(reading.note).toContain('scale is undetermined');
+    // A bare clause. The caller composes the sentence, so the reason is not
+    // repeated once per parameter.
+    expect(reading.note).toBe('counts units of tokenIn');
   });
 
   it('says nothing about scale for a parameter that is not an amount', () => {
@@ -131,7 +132,7 @@ describe('readPauAmount', () => {
       ['0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9', '0x1111111111111111111111111111111111111111', 1000n, 0n]
     );
     expect(reading.scaled).toBeNull();
-    expect(reading.note).toContain('the scale is undetermined');
+    expect(reading.note).toContain('the asset named by parameter 1');
     expect(reading.note).toContain('0x1111111111111111111111111111111111111111');
   });
 

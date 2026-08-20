@@ -32,8 +32,9 @@
  *     issue on any difference (`.github/workflows/pau-dispatch.yml`).
  *
  * This decoder stays synchronous and pure like every other `CustomDecoder`, so
- * it works offline and in the CLI. It always states the block its table was
- * frozen at.
+ * it works offline and in the CLI. Every decoding carries the frozen-at block
+ * as a batch-level caveat — once for the batch, not once per call — which a
+ * surface that runs the live check drops. See `pauFrozenTableCaveat`.
  *
  * `AdministeredAgent.call(address,bytes)` is deliberately NOT decoded here.
  * Every observed PAU allocator transaction uses `batchCall`, and the
@@ -52,6 +53,7 @@ import {
   findPauWire,
   describeMaxSlippage,
   readPauAmount,
+  pauFrozenTableCaveat,
   PAU_FUNCTION_NOTES,
   PAU_MAX_SLIPPAGE_FUNCTIONS,
   type PauControllerTable,
@@ -242,7 +244,14 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
     return ['batchCall']
   }
 
-  /** The batch itself: what it forwards, to whom, and in what order. */
+  /**
+   * The batch itself.
+   *
+   * Deliberately holds NO per-call rows. Each call's target, selector, value
+   * and calldata belong to that call, and a batch-level list of them made every
+   * call appear twice on screen: once as flat rows here, once as a decoded card
+   * below. Each nested call now carries its own `target` and `rawCalldata`.
+   */
   private describeBatch(
     targets: readonly Address[],
     calls: readonly Hex[],
@@ -252,23 +261,6 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
     const parameters: DecodedFunction['parameters'] = [
       { name: 'calls', type: 'uint256', value: BigInt(targets.length) },
     ]
-
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i]
-      if (!target) continue
-      const label = `call ${i + 1} of ${targets.length}`
-      parameters.push({ name: `${label} — target`, type: 'address', value: target })
-      parameters.push({
-        name: `${label} — call selector`,
-        type: 'bytes4',
-        value: selectorOf(calls[i] ?? '0x'),
-      })
-      parameters.push({
-        name: `${label} — value`,
-        type: 'uint256',
-        value: values[i] ?? 0n,
-      })
-    }
 
     const lengthsAgree =
       targets.length === calls.length && targets.length === values.length
@@ -286,8 +278,22 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
     if (nonZeroValue) {
       warnings.push(
         `⚠️ At least one call in this batch forwards ETH. PAU allocator calls normally ` +
-          `forward zero. Confirm every non-zero value above.`
+          `forward zero. Confirm every non-zero value below.`
       )
+    }
+
+    // The frozen-table caveat, once for the batch rather than once per call.
+    // Repeating it under every call buried the decoded arguments, and the web
+    // UI drops it entirely because its verification banner covers freshness.
+    // One entry per distinct table, because a batch may reach two Controllers.
+    const seen = new Set<string>()
+    for (const target of targets) {
+      const table = findPauControllerTable(this.tables, target)
+      if (!table) continue
+      const key = `${table.frozenAtBlock}:${table.frozenAtDate}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      warnings.push(pauFrozenTableCaveat(table.frozenAtBlock, table.frozenAtDate))
     }
 
     return {
@@ -322,15 +328,14 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       return {
         name: 'call with no selector',
         signature: `${position} — no 4-byte selector`,
-        parameters: [
-          { name: 'target', type: 'address', value: target },
-          { name: 'calldata', type: 'bytes', value: data },
-          { name: 'value', type: 'uint256', value },
-        ],
+        parameters: [],
+        target,
+        rawCalldata: data,
         explanation:
           `${position} carries no 4-byte selector, so nothing identifies what it calls.\n\n` +
           `  • Target — ${target}\n` +
-          `  • Calldata (full) — ${data}\n\n` +
+          valueBullet(value) +
+          `\n` +
           `A PAU Controller reverts a call with fewer than four bytes of calldata. Confirm ` +
           `this entry is intended before signing.`,
         warnings: [
@@ -348,18 +353,16 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       return {
         name: 'unknown Controller',
         signature: `${position} — ${callSelector} on ${target}`,
-        parameters: [
-          { name: 'target', type: 'address', value: target },
-          { name: 'call selector', type: 'bytes4', value: callSelector },
-          { name: 'calldata', type: 'bytes', value: data },
-          { name: 'value', type: 'uint256', value },
-        ],
+        parameters: [],
+        target,
+        rawCalldata: data,
         explanation:
           `${position} cannot be decoded. This build holds no dispatch table for ` +
           `${target}.\n\n` +
           `  • Target — ${target}\n` +
           `  • Call selector — ${callSelector}\n` +
-          `  • Calldata (full) —\n    ${data}\n\n` +
+          valueBullet(value) +
+          `\n` +
           `A PAU Controller's selector-to-facet mapping is per-Controller ON-CHAIN STATE, not ` +
           `a property of any published ABI. This build carries a frozen copy of that mapping ` +
           `for ${this.tables.length} Controller${this.tables.length === 1 ? '' : 's'}: ` +
@@ -382,18 +385,16 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       return {
         name: 'unknown call selector',
         signature: `${position} — ${callSelector} on ${target}`,
-        parameters: [
-          { name: 'Controller', type: 'address', value: target },
-          { name: 'call selector', type: 'bytes4', value: callSelector },
-          { name: 'calldata', type: 'bytes', value: data },
-          { name: 'value', type: 'uint256', value },
-        ],
+        parameters: [],
+        target,
+        rawCalldata: data,
         explanation:
           `${position} cannot be decoded. Call selector ${callSelector} is not in this ` +
           `build's frozen dispatch table for ${table.label} ${table.controller}.\n\n` +
           `  • Controller — ${target}\n` +
           `  • Call selector — ${callSelector}\n` +
-          `  • Calldata (full) —\n    ${data}\n\n` +
+          valueBullet(value) +
+          `\n` +
           `The mapping from a call selector to a facet is per-Controller ON-CHAIN STATE. ` +
           `This build's copy was frozen at block ${table.frozenAtBlock} ` +
           `(${table.frozenAtDate}) and holds ${table.wires.length} selectors. A selector ` +
@@ -410,12 +411,17 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       }
     }
 
-    return this.decodeWiredCall(table, wire, target, data, value, position)
+    return this.decodeWiredCall(wire, target, data, value, position)
   }
 
-  /** Decode an inner call whose dispatch the frozen table covers. */
+  /**
+   * Decode an inner call whose dispatch the frozen table covers.
+   *
+   * The frozen-at block is NOT stated here. It is the same for every call in a
+   * batch, so it is carried once as a batch-level warning — see
+   * `pauFrozenTableCaveat`.
+   */
   private decodeWiredCall(
-    table: PauControllerTable,
     wire: PauWire,
     controller: Address,
     data: Hex,
@@ -438,32 +444,35 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       decodeFailed = error instanceof Error ? error.message : String(error)
     }
 
-    const parameters: DecodedFunction['parameters'] = [
-      { name: 'Controller', type: 'address', value: controller },
-      { name: 'call selector (sent)', type: 'bytes4', value: wire.callSelector },
-      { name: 'delegate selector (executed)', type: 'bytes4', value: wire.delegateSelector },
-      { name: 'facet', type: 'address', value: wire.facet },
-      { name: 'facet contract', type: 'string', value: wire.facetName ?? 'unknown' },
-      { name: 'integration id', type: 'bytes32', value: wire.integrationId },
-      ...(wire.integrationLabel
-        ? [{ name: 'integration', type: 'string', value: wire.integrationLabel }]
-        : []),
-      { name: 'value', type: 'uint256', value },
-    ]
+    // The context — Controller, both selectors, facet, integration — is carried
+    // by the explanation bullets below, and the parameter rows hold the decoded
+    // ARGUMENTS only. Putting both in both places printed every call twice
+    // inside its own card.
+    const context =
+      `  • Controller — ${controller}\n` +
+      `  • Call selector (sent) — ${wire.callSelector}\n` +
+      `  • Delegate selector (executed) — ${wire.delegateSelector}\n` +
+      `  • Facet — ${wire.facet}` +
+      (wire.facetName ? ` (${wire.facetName})` : '') +
+      `\n` +
+      `  • Integration id — ${wire.integrationId}` +
+      (wire.integrationLabel ? ` (${wire.integrationLabel})` : '') +
+      `\n` +
+      valueBullet(value)
+
+    const parameters: DecodedFunction['parameters'] = []
 
     if (decodeFailed) {
       return {
         name: wire.abi.name,
         signature: wire.signature,
-        parameters: [...parameters, { name: 'calldata', type: 'bytes', value: data }],
+        parameters,
+        target: controller,
+        rawCalldata: data,
         explanation:
           `${position} resolves to ${wire.signature} on facet ${wire.facet}, but the ` +
           `forwarded arguments could not be decoded against that function: ${decodeFailed}\n\n` +
-          `  • Controller — ${controller}\n` +
-          `  • Call selector (sent) — ${wire.callSelector}\n` +
-          `  • Delegate selector (executed) — ${wire.delegateSelector}\n` +
-          `  • Calldata (full) —\n    ${data}\n\n` +
-          `Dispatch table frozen at block ${table.frozenAtBlock} (${table.frozenAtDate}).`,
+          context,
         warnings: [
           `⚠️ ${position} could not be decoded against ${wire.signature}: ${decodeFailed}. ` +
             `Verify the raw calldata by hand before signing.`,
@@ -474,7 +483,9 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
 
     const key = `${wire.facetName}.${wire.signature}`
     const inputs = wire.abi.inputs ?? []
-    const domainNotes: string[] = []
+    // Parameters whose value is a token amount this build cannot scale. Named
+    // once, in one line, rather than by repeating the argument list.
+    const scaleNotes: string[] = []
 
     for (let i = 0; i < inputs.length; i++) {
       const input = inputs[i]
@@ -489,7 +500,6 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
           type: input.type,
           value: `${reading.value} — ${reading.meaning}`,
         })
-        domainNotes.push(`  • ${name} — ${reading.value}\n    ${reading.meaning}`)
         if (reading.warning) warnings.push(`⚠️ ${position}: ${reading.warning.slice(2).trim()}`)
         continue
       }
@@ -504,15 +514,11 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
           type: input.type,
           value: reading.scaled ?? raw,
         })
-        domainNotes.push(
-          `  • ${name} (${input.type}) — ${reading.scaled ?? raw.toString()}` +
-            (reading.note ? ` (${reading.note})` : '')
-        )
+        if (reading.note) scaleNotes.push(`${name} ${reading.note}`)
         continue
       }
 
       parameters.push({ name, type: input.type, value: renderValue(input, raw) })
-      domainNotes.push(`  • ${name} (${input.type}) — ${String(renderValue(input, raw))}`)
     }
 
     // Re-encode against the bytes the facet receives. The selector swap is the
@@ -530,23 +536,15 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       name: wire.abi.name,
       signature: wire.signature,
       parameters,
+      target: controller,
+      rawCalldata: data,
       explanation:
         `${position} executes ${wire.signature} on ${wire.facetName ?? 'an unnamed facet'}.\n\n` +
-        `  • Controller — ${controller}\n` +
-        `  • Call selector (sent) — ${wire.callSelector}\n` +
-        `  • Delegate selector (executed) — ${wire.delegateSelector}\n` +
-        `  • Facet — ${wire.facet}\n` +
-        `  • Integration id — ${wire.integrationId}` +
-        (wire.integrationLabel ? ` (${wire.integrationLabel})` : '') +
-        `\n\n` +
-        `Arguments:\n${domainNotes.join('\n')}\n\n` +
-        (note ? `${note}\n\n` : '') +
-        `The Controller does not execute ${wire.callSelector}. It replaces that selector with ` +
-        `${wire.delegateSelector} and delegatecalls ${wire.facet}, forwarding the argument ` +
-        `bytes unchanged.\n\n` +
-        `Dispatch table frozen at block ${table.frozenAtBlock} (${table.frozenAtDate}); not ` +
-        `verified against the chain by this decoder. The web UI checks it against ` +
-        `getDispatches on the Controller before presenting it.`,
+        context +
+        (note ? `\n${note}\n` : '') +
+        (scaleNotes.length > 0
+          ? `\nNot scaled, shown as raw integers: ${scaleNotes.join('; ')}.\n`
+          : ''),
       warnings,
       riskLevel:
         reencode.status === 'mismatch' || reencode.status === 'unverifiable'
@@ -563,6 +561,16 @@ export function createPauAgentDecoders(
   tables: readonly PauControllerTable[] = PAU_DISPATCH_TABLES
 ): PAUAdministeredAgentDecoder[] {
   return PAU_ADMINISTERED_AGENTS.map(agent => new PAUAdministeredAgentDecoder(agent, tables))
+}
+
+/**
+ * The ETH bullet for a call's context block.
+ *
+ * Always present. A batch that forwards value is unusual for PAU, and a signer
+ * has to be able to see the zero as easily as the non-zero.
+ */
+function valueBullet(value: bigint): string {
+  return `  • ETH value — ${value.toString()} wei\n`
 }
 
 /** The full 4-byte selector of a call, or `0x` when there is none. */

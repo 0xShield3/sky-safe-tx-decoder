@@ -278,18 +278,49 @@ and are not in the calldata.
 
 ## Rendering rules
 
-- Both selectors are always shown: the call selector sent, and the delegate selector executed.
-  They differ on every wire.
-- The facet address, the facet contract name, and the integration id are shown for every call.
+**Each call renders once.** The batch carries no per-call rows — only the call count. Every
+fact about a call belongs to that call: its target and its complete calldata are carried on
+the nested call itself, as `target` and `rawCalldata` on `DecodedFunction`. A batch-level list
+of targets and selectors beside a list of decoded cards printed every call twice, in two
+places.
+
+One call renders as:
+
+| Part | Content |
+| --- | --- |
+| Heading | the facet function name and its canonical signature |
+| Context bullets | Controller, call selector sent, delegate selector executed, facet address and contract name, integration id and label, ETH value |
+| Parameters | the decoded arguments, and nothing else |
+| Raw calldata | that call's complete calldata, behind a disclosure in the web UI |
+
+Other rules:
+
+- Both selectors are always shown. They differ on every wire.
 - Addresses, `bytes4` selectors, `bytes32` ids, and calldata render in full. A resolved label
-  is shown beside the full value, never in place of it.
+  is shown beside the full value, never in place of it. The raw calldata disclosure holds the
+  complete byte sequence and wraps rather than shortening.
 - Tick bounds render as raw `int24` values. TWAP windows render as raw `uint32` seconds. Tick
   deltas render as raw `uint24` values. None is a price or a percentage, and the explanation
   says so.
 - Where the denomination is unknown, an amount is emitted as a bare integer so the decimals
-  picker in the UI stays available.
+  picker in the UI stays available. The parameters that are amounts this build cannot scale
+  are named in one line under the context bullets, not by repeating the argument list.
 - Every nested call's warnings are lifted onto the batch, because the UI renders a batch's
   warning list and not a nested call's.
+
+### The frozen-table caveat
+
+A decoding carries one warning stating the block its dispatch table was frozen at and that
+nothing checked it against the chain. It is emitted **once for the batch**, not once per call:
+it is the same for every call, and repeating it under each one buried the arguments.
+
+Its opening words are the exported constant `PAU_FROZEN_TABLE_CAVEAT_PREFIX`, and
+`isPauFrozenTableCaveat` recognises it.
+
+| Surface | Behaviour |
+| --- | --- |
+| CLI | shows the caveat. It makes no network calls, so nothing else reports freshness. |
+| Web UI | filters the caveat out. Its verification banner reports freshness in all three states, and the caveat left beside a green banner would contradict it. |
 
 ## What the decoder does not do
 
