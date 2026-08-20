@@ -104,11 +104,22 @@ export class PASConfiguratorDecoder implements CustomDecoder {
     // Re-encode and byte-compare. viem's decoder ignores bytes appended past
     // the end of the encoded arguments, so without this check a transaction
     // carrying extra trailing calldata would render as a clean, ordinary call.
-    const reencodeWarnings = checkReencode(PAS_CONFIGURATOR_ABI, functionName, decodedArgs, data)
-    if (reencodeWarnings.length > 0) {
-      main.warnings = [...(main.warnings ?? []), ...reencodeWarnings]
+    const reencode = checkReencode(PAS_CONFIGURATOR_ABI, functionName, decodedArgs, data)
+
+    // Trailing bytes leave the decoded parameters correct, so this is a warning
+    // about bytes the display does not cover, not a reason to distrust the
+    // display. It stays out of generalWarnings, which the UI renders as
+    // "decoder verification failed". See spbeam.ts.
+    if (reencode.status === 'trailing') {
+      main.warnings = [...(main.warnings ?? []), ...reencode.warnings]
+      if (main.riskLevel !== 'high') main.riskLevel = 'medium'
+      return { main, isMulticall: false }
+    }
+
+    if (reencode.status !== 'exact') {
+      main.warnings = [...(main.warnings ?? []), ...reencode.warnings]
       main.riskLevel = 'high'
-      return { main, isMulticall: false, generalWarnings: reencodeWarnings }
+      return { main, isMulticall: false, generalWarnings: reencode.warnings }
     }
 
     return { main, isMulticall: false }

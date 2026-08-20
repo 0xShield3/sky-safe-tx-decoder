@@ -345,26 +345,29 @@ describe('PASConfiguratorDecoder', () => {
   describe('re-encode self-check', () => {
     // viem's decoder ignores bytes past the end of the encoded arguments, so
     // without this check appended calldata would render as an ordinary call.
-    it('should flag trailing calldata that the decoder would otherwise ignore', () => {
+    it('should flag trailing calldata as extra bytes, not as a mismatch', () => {
       const result = decoder.decode((SET_USDS_MINT + 'deadbeef') as Hex);
+      const warnings = result.main.warnings!.join(' ');
 
-      expect(result.main.riskLevel).toBe('high');
-      expect(result.generalWarnings).toBeDefined();
-      expect(result.generalWarnings!.join(' ')).toContain('DOES NOT MATCH RAW CALLDATA');
-      expect(result.generalWarnings!.join(' ')).toContain('DO NOT SIGN');
+      expect(warnings).toContain('4 bytes');
+      expect(warnings).toContain('0xdeadbeef');
+      // The parameters re-encode to the start of the call exactly, so they are
+      // correct. generalWarnings drives the red "decoder verification failed"
+      // banner, which would be false here.
+      expect(result.generalWarnings).toBeUndefined();
+      expect(result.main.riskLevel).toBe('medium');
     });
 
-    it('should include both byte sequences in full in the mismatch warning', () => {
-      const tampered = (SET_USDS_MINT + 'deadbeef') as Hex;
-      const warning = decoder.decode(tampered).generalWarnings!.join(' ');
+    it('should still decode the parameters alongside trailing bytes', () => {
+      const result = decoder.decode((SET_USDS_MINT + 'deadbeef') as Hex);
 
-      expect(warning).toContain(tampered);
-      expect(warning).toContain(SET_USDS_MINT);
+      expect(param(result.main, 'key name')).toBe('LIMIT_USDS_MINT');
+      expect(param(result.main, 'maxAmount')).toContain('5,000,000 USDS');
     });
 
     it('should flag trailing calldata on callControllerAction too', () => {
       const result = decoder.decode((CALL_CONTROLLER_ACTION + 'deadbeef') as Hex);
-      expect(result.generalWarnings!.join(' ')).toContain('DO NOT SIGN');
+      expect(result.main.warnings!.join(' ')).toContain('4 bytes');
     });
   });
 
