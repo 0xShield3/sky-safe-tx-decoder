@@ -461,7 +461,7 @@ export function readPauAmount(
     return {
       scaled:
         `${value.toString()} = ${formatUnitsLoose(value, decimals, { group: true })} ` +
-        `${denomination.symbol} (${denomination.address})`,
+        `${denomination.symbol}`,
       note: null,
     }
   }
@@ -482,13 +482,14 @@ export function readPauAmount(
     }
   }
 
-  // The label never replaces the address. Both are shown, so a lookalike
-  // address carrying a familiar label cannot pass as the token it imitates.
+  // The symbol is safe to show alone: it is looked up from the operand, so a
+  // lookalike address not in the registry yields no scaled line at all. The
+  // operand itself renders in full as its own parameter, matching PAS.
   const label = knownTokenLabel(network, operand)
   return {
     scaled:
       `${value.toString()} = ${formatUnitsLoose(value, decimals, { group: true })} ` +
-      `${label ?? 'units'} (${operand})`,
+      `${label ?? `units of ${operand}`}`,
     note: null,
   }
 }

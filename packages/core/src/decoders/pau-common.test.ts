@@ -72,15 +72,16 @@ describe('readPauAmount', () => {
     const reading = readPauAmount('ethereum', 'USDSFacet', 'mint(uint256)', 0, 5000000000000000000000000n, []);
     expect(reading.scaled).toContain('5000000000000000000000000');
     expect(reading.scaled).toContain('5,000,000 USDS');
-    // The label never stands alone.
-    expect(reading.scaled).toContain(USDS);
+    // The symbol stands alone; the address it came from is decoder metadata,
+    // not calldata, and any calldata token renders in full as its own parameter.
+    expect(reading.scaled).toMatch(/USDS$/);
     expect(reading.note).toBeNull();
   });
 
   it('scales a PSM swap in USDC, not in the token being received', () => {
     const reading = readPauAmount('ethereum', 'PSMFacet', 'swapUSDCToUSDS(uint256)', 0, 5000000000000n, []);
     expect(reading.scaled).toContain('5,000,000 USDC');
-    expect(reading.scaled).toContain(USDC);
+    expect(reading.scaled).toMatch(/USDC$/);
   });
 
   it('takes a Basin amount from the asset in parameter 1, not the Basin in parameter 0', () => {
@@ -93,7 +94,7 @@ describe('readPauAmount', () => {
       ['0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9', USDS, 1000000000000000000n, 0n]
     );
     expect(reading.scaled).toContain('1 USDS');
-    expect(reading.scaled).toContain(USDS);
+    expect(reading.scaled).toMatch(/USDS$/);
   });
 
   it('states the scale is undetermined for an amount the facet source does not pin', () => {
