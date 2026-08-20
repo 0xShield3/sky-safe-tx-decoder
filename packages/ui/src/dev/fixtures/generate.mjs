@@ -41,23 +41,38 @@ const setRateLimit = (key, maxAmount, slope) =>
     args: [RATE_LIMITS, key, maxAmount, slope],
   })
 
+const LIMIT_USDS_MINT =
+  '0xcb0537d5e5dba65a8edbac12555995860e5b8e1b70996011edb1ca8173e56d3c'
+
+/**
+ * Nonces 0 to 3 are the four operations a cBEAM Safe is permitted to perform.
+ * Nonces 4 and up exercise decoder behaviour that those four do not reach.
+ *
+ * Note that an increase and a decrease are the same selector with the same four
+ * arguments. Nothing in the calldata distinguishes them: only the current
+ * on-chain value does, and that is not in the transaction. The decoder
+ * therefore reports the values and does not claim a direction.
+ */
 const FIXTURES = [
   {
     nonce: 0,
-    name: 'pas-bare-key',
+    name: 'pas-increase',
     description:
-      'PAS Configurator setRateLimit. Bare key LIMIT_USDS_MINT, which resolves from the name alone and is denominated in USDS (18 decimals).',
-    data: setRateLimit(
-      '0xcb0537d5e5dba65a8edbac12555995860e5b8e1b70996011edb1ca8173e56d3c',
-      5_000_000_000_000_000_000_000_000n,
-      57_870_370_370_370_370_370n
-    ),
+      'Operation 1 of 4: raise a rate limit. LIMIT_USDS_MINT from its current 5,000,000 USDS to 6,000,000 USDS, with the slope raised to match. Subject to the maxChange ceiling and the hop cooldown.',
+    data: setRateLimit(LIMIT_USDS_MINT, 6_000_000_000_000_000_000_000_000n, 69_444_444_444_444_444_444n),
   },
   {
     nonce: 1,
+    name: 'pas-decrease',
+    description:
+      'Operation 2 of 4: lower a rate limit, the de-risk path. LIMIT_USDS_MINT from its current 5,000,000 USDS down to 1,000,000 USDS. Identical calldata shape to nonce 0; only the values differ.',
+    data: setRateLimit(LIMIT_USDS_MINT, 1_000_000_000_000_000_000_000_000n, 11_574_074_074_074_074_074n),
+  },
+  {
+    nonce: 2,
     name: 'pas-unlimited-repin',
     description:
-      'PAS Configurator setRateLimit. Two-operand key LIMIT_BASIN_WITHDRAW scoped to USDC and the JTRSY Basin, re-pinned as unlimited. Denomination comes from the resolved asset operand.',
+      'Operation 3 of 4: re-pin a key locked unlimited. LIMIT_BASIN_WITHDRAW scoped to USDC and the JTRSY Basin. The contract accepts only maxAmount = type(uint256).max with slope = 0 on such a key.',
     data: setRateLimit(
       '0xdfd7309f2f1b84a83ada77042d91e79a9cb3daf3ecd4c5335dede65b95c888f5',
       UINT256_MAX,
@@ -65,10 +80,23 @@ const FIXTURES = [
     ),
   },
   {
-    nonce: 2,
+    nonce: 3,
+    name: 'pas-controller-action',
+    description:
+      'Operation 4 of 4: run a staged controller action. The inner calldata is not decoded; the keccak256 hash BeamState authorises on is surfaced instead.',
+    data: encodeFunctionData({
+      abi: ABI,
+      functionName: 'callControllerAction',
+      args: [CONTROLLER, '0x140aad6a0000000000000000000000000000000000000000000000000000000000000001'],
+    }),
+  },
+
+  // --- Beyond the permitted four: decoder behaviour worth being able to see ---
+  {
+    nonce: 4,
     name: 'pas-aggregate-18dec',
     description:
-      'PAS Configurator setRateLimit. LIMIT_UNISWAP_V3_DEPOSIT keyed by the pool alone. This arity meters a 1e18-normalised sum across both pool tokens.',
+      'LIMIT_UNISWAP_V3_DEPOSIT keyed by the pool alone. This arity meters a 1e18-normalised sum across both pool tokens.',
     data: setRateLimit(
       '0xd3384d5424cd179640223010fed859f38b86b26e5e0b9ee88b87321b98882f57',
       5_000_000_000_000_000_000_000_000n,
@@ -76,10 +104,10 @@ const FIXTURES = [
     ),
   },
   {
-    nonce: 3,
+    nonce: 5,
     name: 'pas-pertoken-6dec',
     description:
-      'PAS Configurator setRateLimit. LIMIT_UNISWAP_V3_DEPOSIT keyed by USDC and the same pool. Same key name as nonce 2, but this arity meters raw 6-decimal USDC. The two differ by a factor of 10^12.',
+      'LIMIT_UNISWAP_V3_DEPOSIT keyed by USDC and the same pool. Same key name as nonce 4, but this arity meters raw 6-decimal USDC. The two differ by a factor of 10^12.',
     data: setRateLimit(
       '0x71efb11b03476e40dcc1ade629d360114fcbf838d70a3211270f69414ba9a187',
       5_000_000_000_000n,
@@ -87,22 +115,18 @@ const FIXTURES = [
     ),
   },
   {
-    nonce: 4,
+    nonce: 6,
     name: 'pas-unresolved-key',
     description:
-      'PAS Configurator setRateLimit with a key that matches no known preimage. Shows the unresolved rendering: full bytes32, no scaled amount, high risk.',
+      'A key that matches no known preimage. Shows the unresolved rendering: full bytes32, no scaled amount, high risk.',
     data: setRateLimit(`0x${'11'.repeat(32)}`, 1_000_000_000n, 100n),
   },
   {
-    nonce: 5,
-    name: 'pas-controller-action',
+    nonce: 7,
+    name: 'pas-unlimited-bad-slope',
     description:
-      'PAS Configurator callControllerAction. The inner calldata is not decoded; the keccak256 hash BeamState authorises on is surfaced instead.',
-    data: encodeFunctionData({
-      abi: ABI,
-      functionName: 'callControllerAction',
-      args: [CONTROLLER, '0x140aad6a0000000000000000000000000000000000000000000000000000000000000001'],
-    }),
+      'maxAmount is type(uint256).max but slope is not zero. On a key locked unlimited this reverts; on any other key it sets an effectively unbounded limit.',
+    data: setRateLimit(LIMIT_USDS_MINT, UINT256_MAX, 1n),
   },
 ]
 

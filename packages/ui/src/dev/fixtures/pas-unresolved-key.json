@@ -1,5 +1,5 @@
 {
-  "description": "PAS Configurator setRateLimit with a key that matches no known preimage. Shows the unresolved rendering: full bytes32, no scaled amount, high risk.",
+  "description": "A key that matches no known preimage. Shows the unresolved rendering: full bytes32, no scaled amount, high risk.",
   "version": "1.3.0",
   "transaction": {
     "safe": "0xfeEDfaCeFeEdFaceFEedFACefEEDFaCEfEeDfAce",
@@ -12,7 +12,7 @@
     "gasPrice": "0",
     "gasToken": "0x0000000000000000000000000000000000000000",
     "refundReceiver": "0x0000000000000000000000000000000000000000",
-    "nonce": "4",
+    "nonce": "6",
     "safeTxHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "isExecuted": false,
     "isSuccessful": null,
