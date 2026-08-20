@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **PAS Configurator decoder** (`0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929`,
+  Ethereum mainnet), covering both of the contract's state-changing functions:
+  `setRateLimit` and `callControllerAction`. The ABI is transcribed from the
+  source verified on Sourcify — exact match on creation and runtime bytecode,
+  `src/Configurator.sol:Configurator`, solc 0.8.24+commit.e11b9ed9, not a proxy.
+
+  - Rate-limit keys are resolved by recomputing the keccak preimage. An
+    unmatched key renders its full `bytes32` and is reported as unresolved.
+  - `maxAmount` and `slope` are scaled by the key's own denomination. Keys
+    scoped to an operand token are shown as raw integers with the scale stated
+    as undetermined.
+  - `slope` is rendered per day as well as per second.
+  - `type(uint256).max` renders as `UNLIMITED`.
+  - `callControllerAction` surfaces `keccak256(data)`, the value BeamState
+    authorises on. The inner calldata is not decoded.
+
+  See `packages/core/src/decoders/PAS.md` for the key table, denominations, and
+  scope.
+
+- **PAS contracts added to the Ethereum registry** so they are labelled during
+  review: PAS Configurator, PAS BeamState
+  (`0x1A1879E66547F90bfF87D45A5b0335950E019E02`), and the Grove RateLimits
+  contract (`0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1`).
+
 ## [0.3.1] — 2026-08-12
 
 Beacon proxy support, wider decoder coverage on Sourcify, and a changed default

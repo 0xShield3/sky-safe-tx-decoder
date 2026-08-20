@@ -26,6 +26,48 @@ export const CONTRACTS: NetworkContract[] = [
     category: 'protocol',
   },
   {
+    address: '0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929',
+    label: 'PAS Configurator',
+    description:
+      'Sky PAS (Parallelized Allocation System) Configurator — the cBEAM entry point for moving a PAU rate limit within governance-set ceilings, and for running pre-staged controller actions',
+    category: 'protocol',
+  },
+  {
+    address: '0x1A1879E66547F90bfF87D45A5b0335950E019E02',
+    label: 'PAS BeamState',
+    description:
+      'Sky PAS BeamState — holds cBEAM pairings, the hop cooldown, the maxChange ceiling multiplier, governance-seeded rate-limit defaults, and the global stop flag the Configurator checks',
+    category: 'protocol',
+  },
+  {
+    address: '0xE016Ae733A77Ba77E7907aAA749394Fc5e75C0e1',
+    label: 'Grove RateLimits',
+    description:
+      'RateLimits contract for the Grove PAU — the target of setRateLimit calls from the Grove cBEAM Safe',
+    category: 'protocol',
+  },
+  {
+    address: '0xf08943f817e1F902dEbC884c7B19Ea5764594Ac9',
+    label: 'JTRSY Grove Basin',
+    description:
+      'Grove Basin for JTRSY — an operand of the LIMIT_BASIN_DEPOSIT and LIMIT_BASIN_WITHDRAW rate-limit keys',
+    category: 'protocol',
+  },
+  {
+    address: '0xCBa428fB052B365557DAf52b744DFfF20d5FbEdD',
+    label: 'BUIDL Grove Basin',
+    description:
+      'Grove Basin for BUIDL — an operand of the LIMIT_BASIN_DEPOSIT and LIMIT_BASIN_WITHDRAW rate-limit keys',
+    category: 'protocol',
+  },
+  {
+    address: '0xbAFeAd7c60Ea473758ED6c6021505E8BBd7e8E5d',
+    label: 'Uniswap v3 AUSD/USDC',
+    description:
+      'Uniswap v3 AUSD/USDC pool used by the Grove PAU — an operand of the LIMIT_UNISWAP_V3_DEPOSIT, LIMIT_UNISWAP_V3_WITHDRAW and LIMIT_UNISWAP_V3_SWAP rate-limit keys',
+    category: 'protocol',
+  },
+  {
     address: '0xBE8E3e3618f7474F8cB1d074A26afFef007E98FB',
     label: 'MCD_Pause_proxy',
     description: 'Sky governance pause proxy — executes passed governance spells',
@@ -114,6 +156,13 @@ export const CONTRACTS: NetworkContract[] = [
     description: 'MakerDAO DAI stablecoin',
     category: 'token',
     decimals: 18,
+  },
+  {
+    address: '0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a',
+    label: 'AUSD',
+    description: 'Agora USD stablecoin',
+    category: 'token',
+    decimals: 6,
   },
 
   // Wrapped natives

@@ -20,6 +20,7 @@ import {
   LockstakeEngineDecoder,
   SPBEAMDecoder,
   StUsdsRateSetterDecoder,
+  PASConfiguratorDecoder,
   calculateSafeTxHash,
   verifySafeTxHash,
   analyzeSecurity,
@@ -44,6 +45,7 @@ import {
 decoderRegistry.register(new LockstakeEngineDecoder());
 decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
+decoderRegistry.register(new PASConfiguratorDecoder());
 
 export function createVerifyCommand(): Command {
   const command = new Command('verify');

@@ -231,6 +231,7 @@ Currently included:
 | Sky Protocol LockstakeEngine | `0xCe01C90dE7FD1bcFa39e237FE6D8D9F569e8A6a3` | 13 — urn management, staking, borrowing, delegation, rewards, multicall |
 | Sky Protocol SPBEAM          | `0x36B072ed8AFE665E3Aa6DaBa79Decbec63752b22` | 7 — `set`, `file` (two overloads), `rely`, `deny`, `kiss`, `diss` |
 | Sky Protocol StUsdsRateSetter | `0x30784615252B13E1DbE2bDf598627eaC297Bf4C5` | 7 — `set`, `file` (two overloads), `rely`, `deny`, `kiss`, `diss` |
+| Sky Protocol PAS Configurator | `0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929` | 2 — `setRateLimit`, `callControllerAction` |
 | MultiSend                    | Standard Safe MultiSend                      | Batch transaction decoding                            |
 
 **SPBEAM** sets stability fees and the savings rate within governance-configured bounds.
@@ -240,6 +241,16 @@ percentage; ilk identifiers show their ASCII label alongside the full `bytes32`.
 **StUsdsRateSetter** sets the stUSDS savings rate, ilk duty, debt ceiling and supply cap
 within governance-configured bounds. The Safe Transaction Service holds no ABI for this
 contract at all.
+
+**PAS Configurator** is the cBEAM entry point of the Parallelized Allocation System. It
+moves a Parallelized Allocation Unit's rate limits within governance-set ceilings without a
+spell. Rate-limit keys are keccak hashes rather than ASCII, so the decoder resolves them by
+recomputing the preimage; `maxAmount` and `slope` are scaled by the key's own denomination,
+which is not the target contract's; and `callControllerAction` surfaces `keccak256(data)`,
+the value BeamState authorises on.
+
+See [`packages/core/src/decoders/PAS.md`](packages/core/src/decoders/PAS.md) for the key
+table, denominations, rendering rules, and scope.
 
 When no decoder covers a contract and the Safe Transaction Service returns nothing, the
 Sourcify fallback fetches the contract's verified ABI and decodes with that instead. See
