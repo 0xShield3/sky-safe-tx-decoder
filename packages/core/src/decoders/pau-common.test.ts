@@ -41,22 +41,23 @@ describe('describeMaxSlippage', () => {
   it('reads 1e18 as no slippage allowed', () => {
     const reading = describeMaxSlippage(1000000000000000000n);
     expect(reading.value).toBe('1000000000000000000');
-    expect(reading.meaning).toContain('no slippage is allowed');
+    expect(reading.meaning).toContain('no slippage allowed');
   });
 
   it('reads 0 as the unconfigured state, not zero tolerance', () => {
     const reading = describeMaxSlippage(0n);
     expect(reading.value).toBe('0');
-    expect(reading.meaning).toContain('leaves the integration unconfigured');
-    expect(reading.meaning).toContain('max-slippage-not-set');
+    expect(reading.meaning).toContain('unset');
+    expect(reading.meaning).toContain('revert');
     expect(reading.warning).toBeDefined();
-    expect(reading.warning).toContain('does NOT mean zero slippage tolerance');
+    expect(reading.warning).toContain('does NOT mean zero tolerance');
   });
 
   it('warns when the value is above 1e18, which reverts every call', () => {
     const reading = describeMaxSlippage(1000000000000000001n);
     expect(reading.warning).toContain('above 1e18');
-    expect(reading.warning).toContain('1000000000000000001');
+    expect(reading.warning).toContain('above 1e18');
+    expect(reading.warning).toContain('reverts');
   });
 
   it('keeps the full raw integer for every case', () => {

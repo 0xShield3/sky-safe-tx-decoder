@@ -272,33 +272,27 @@ export function describeMaxSlippage(value: bigint): MaxSlippageReading {
   if (value === 0n) {
     return {
       value: '0',
-      meaning:
-        'leaves the integration unconfigured — the facet requires a non-zero value and the ' +
-        'operations that read it revert with max-slippage-not-set',
+      meaning: 'unset — operations that read it revert',
       warning:
-        '⚠️ maxSlippage of 0 does NOT mean zero slippage tolerance. The value is the minimum ' +
-        'acceptable fraction of the expected output, and the facet rejects 0 outright with ' +
-        'max-slippage-not-set. Setting 0 stops the operations that read it.',
+        '⚠️ maxSlippage 0 does NOT mean zero tolerance. It disables the operations that ' +
+        'read it.',
     }
   }
 
   if (value === WAD) {
     return {
       value: value.toString(),
-      meaning:
-        'the result must equal the expected amount exactly (1e18 = 100%) — no slippage is ' +
-        'allowed',
+      meaning: 'the result must equal the expected amount exactly — no slippage allowed',
     }
   }
 
   if (value > WAD) {
     return {
       value: value.toString(),
-      meaning: `requires ${wadPercent(value)}% of the expected amount, which is above 1e18`,
+      meaning: `requires ${wadPercent(value)}% of the expected amount`,
       warning:
-        `⚠️ maxSlippage is above 1e18 (${value.toString()}). The value is the minimum ` +
-        `acceptable fraction of expected output, so a value above 1e18 demands more than the ` +
-        `expected amount and every operation that reads it reverts.`,
+        `⚠️ maxSlippage above 1e18 demands more than the expected amount; every operation ` +
+        `that reads it reverts.`,
     }
   }
 
@@ -392,7 +386,7 @@ const PAU_UNSCALED_AMOUNT: Record<string, Record<number, string>> = {
   // swap(address pool, address tokenIn, uint256 amountIn, uint256 minAmountOut, uint24 tickDelta)
   'UniswapV3Facet.swap(address,address,uint256,uint256,uint24)': {
     2: 'counts units of tokenIn',
-    3: 'counts units of the token received, which the pool decides and the calldata does not name',
+    3: 'counts units of the token received',
   },
   // removeLiquidity(address pool, uint256 tokenId, uint128 liquidity, TokenAmounts min, uint256 deadline)
   'UniswapV3Facet.removeLiquidity(address,uint256,uint128,(uint256,uint256),uint256)': {
@@ -400,18 +394,14 @@ const PAU_UNSCALED_AMOUNT: Record<string, Record<number, string>> = {
   },
   // deposit(address basin, address asset, uint256 amount, uint256 minSharesOut)
   'BasinFacet.deposit(address,address,uint256,uint256)': {
-    3: 'counts Basin shares, whose decimals are a property of the Basin contract',
-  },
-  // withdraw(address basin, address asset, uint256 maxAmount, uint256 minConversionRate)
-  'BasinFacet.withdraw(address,address,uint256,uint256)': {
-    3: 'is a conversion rate, not an amount',
+    3: 'counts Basin shares, not tokens',
   },
   // AaveFacet.deposit(address aToken, uint256 amount) / withdraw(address aToken, uint256 amount)
   'AaveFacet.deposit(address,uint256)': {
-    1: 'counts units of the aToken named by parameter 0, which is not in this build’s contract registry',
+    1: 'counts units of the aToken',
   },
   'AaveFacet.withdraw(address,uint256)': {
-    1: 'counts units of the aToken named by parameter 0, which is not in this build’s contract registry',
+    1: 'counts units of the aToken',
   },
 }
 
@@ -465,7 +455,7 @@ export function readPauAmount(
     if (decimals === null) {
       return {
         scaled: null,
-        note: `counts ${denomination.symbol}, which is not in this build's contract registry`,
+        note: `counts ${denomination.symbol}`,
       }
     }
     return {
@@ -480,7 +470,7 @@ export function readPauAmount(
   if (typeof operand !== 'string') {
     return {
       scaled: null,
-      note: `is ${denomination.note}, which could not be read`,
+      note: `is ${denomination.note}`,
     }
   }
 
@@ -488,8 +478,7 @@ export function readPauAmount(
   if (decimals === null) {
     return {
       scaled: null,
-      note:
-        `is ${denomination.note}, and ${operand} is not a known token in this build`,
+      note: `is ${denomination.note} (${operand})`,
     }
   }
 
@@ -523,25 +512,19 @@ function knownTokenLabel(network: string, address: string): string | null {
  */
 export const PAU_FUNCTION_NOTES: Record<string, string> = {
   'UniswapV3Facet.setMaxSlippage(address,uint256)':
-    'maxSlippage is keyed by POOL, not by token. It is read by addLiquidity and ' +
-    'removeLiquidity. swap is not bounded by it — the facet bounds swap by maxTickDelta ' +
-    'against the TWAP and by the caller’s own minimum output.',
+    'maxSlippage is keyed by pool, not token, and applies to addLiquidity and ' +
+    'removeLiquidity only — not to swap.',
   'AaveFacet.setMaxSlippage(address,uint256)':
-    'maxSlippage is keyed by the aToken market, not by the underlying token. It is read by ' +
-    'deposit, which requires the amount received to reach expected * maxSlippage / 1e18.',
+    'maxSlippage is keyed by the aToken, not the underlying token, and applies to deposit.',
   'UniswapV3Facet.setMaxTickDelta(address,uint24)':
-    'maxTickDelta is a raw uint24 tick count, keyed by pool. It bounds how far the pool ' +
-    'price may sit from its TWAP for a swap to be accepted. It is not a percentage.',
+    'maxTickDelta is a tick count, not a percentage. It caps how far the pool price may ' +
+    'sit from its TWAP for a swap.',
   'UniswapV3Facet.setTWAPSecondsAgo(address,uint32)':
-    'twapSecondsAgo is a raw uint32 number of seconds, keyed by pool. It is the lookback ' +
-    'window the facet reads the TWAP over.',
+    'twapSecondsAgo is the TWAP lookback window, in seconds.',
   'UniswapV3Facet.setLiquidityLowerTickBound(address,int24)':
-    'The bound is a raw int24 Uniswap v3 tick, keyed by pool, and may be negative. It is ' +
-    'not a price and not a percentage.',
+    'The bound is a Uniswap v3 tick, not a price, and may be negative.',
   'UniswapV3Facet.setLiquidityUpperTickBound(address,int24)':
-    'The bound is a raw int24 Uniswap v3 tick, keyed by pool, and may be negative. It is ' +
-    'not a price and not a percentage.',
+    'The bound is a Uniswap v3 tick, not a price, and may be negative.',
   'UniswapV3Facet.swap(address,address,uint256,uint256,uint24)':
-    'swap is bounded by maxTickDelta against the pool TWAP and by the minimum output in ' +
-    'this call. maxSlippage does not apply to it.',
+    'swap is bounded by maxTickDelta and by minAmountOut in this call, not by maxSlippage.',
 }

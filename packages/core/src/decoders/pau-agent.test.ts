@@ -139,7 +139,7 @@ describe('the five real Grove transactions', () => {
     expect(paramValue(swap, 'amountIn')).toBe('750000000000');
     expect(paramValue(swap, 'tickDelta')).toBe('10');
     // maxSlippage does not bound a swap, and the decoder says so.
-    expect(swap.explanation).toContain('maxSlippage does not apply to it');
+    expect(swap.explanation).toContain('not by maxSlippage');
   });
 
   it('decodes nonce 11 — addLiquidity, with its tick and amount tuples', () => {
@@ -251,9 +251,9 @@ describe('a Controller this build holds no table for', () => {
     expect(call.riskLevel).toBe('high');
   });
 
-  it('says the mapping is per-Controller on-chain state', () => {
-    expect(call.explanation).toContain('per-Controller ON-CHAIN STATE');
-    expect(call.explanation).toContain('not a property of any published ABI');
+  it('tells the signer how to resolve the selector themselves', () => {
+    expect(call.explanation).toContain('Read getDispatch(');
+    expect(call.explanation).toContain('before signing');
   });
 
   it('renders the target, the selector and the full calldata', () => {
@@ -283,7 +283,7 @@ describe('a call selector the frozen table does not hold', () => {
   });
 
   it('says the mapping is on-chain state and names the frozen block', () => {
-    expect(call.explanation).toContain('per-Controller ON-CHAIN STATE');
+    expect(call.explanation).toContain('Read getDispatch(');
     expect(call.explanation).toMatch(/frozen at block \d+/);
     expect(call.explanation).toContain('0xdeadbeef');
     expect(call.explanation).toContain(GROVE_CONTROLLER);
@@ -308,7 +308,7 @@ describe('setMaxSlippage rendering', () => {
     expect(call.signature).toBe('setMaxSlippage(address,uint256)');
     expect(paramValue(call, 'maxSlippage')).toContain('999000000000000000');
     expect(paramValue(call, 'maxSlippage')).toContain('at least 99.9% of expected');
-    expect(call.explanation).toContain('keyed by POOL, not by token');
+    expect(call.explanation).toContain('keyed by pool, not token');
     expect(call.warnings).toEqual([]);
   });
 
@@ -317,10 +317,10 @@ describe('setMaxSlippage rendering', () => {
       batchCall([{ target: GROVE_CONTROLLER, data: setMaxSlippage(0n) }])
     );
     const call = decoded.nested![0]!;
-    expect(paramValue(call, 'maxSlippage')).toContain('leaves the integration unconfigured');
-    expect(call.warnings!.join('\n')).toContain('does NOT mean zero slippage tolerance');
+    expect(paramValue(call, 'maxSlippage')).toContain('unset');
+    expect(call.warnings!.join('\n')).toContain('does NOT mean zero tolerance');
     // The UI renders the batch's warnings, not a nested call's, so it must land there too.
-    expect(decoded.main.warnings!.join('\n')).toContain('does NOT mean zero slippage tolerance');
+    expect(decoded.main.warnings!.join('\n')).toContain('does NOT mean zero tolerance');
   });
 
   it('applies the same reading to the AaveFacet on the second Controller', () => {
@@ -337,19 +337,19 @@ describe('setMaxSlippage rendering', () => {
     );
     const call = decoded.nested![0]!;
     expect(call.signature).toBe('setMaxSlippage(address,uint256)');
-    expect(call.explanation).toContain('on AaveFacet.');
+    expect(call.explanation).toContain('(AaveFacet)');
     // A different facet from the UniswapV3Facet entry above, under the same
     // delegate selector 0x73d76dbe.
     expect(call.explanation).not.toContain(UNISWAP_V3_FACET);
     expect(paramValue(call, 'maxSlippage')).toContain('at least 99.5% of expected');
-    expect(call.explanation).toContain('keyed by the aToken market');
+    expect(call.explanation).toContain('keyed by the aToken, not the underlying token');
   });
 
   it('renders 1e18 as no slippage allowed', () => {
     const decoded = decoder.decode(
       batchCall([{ target: GROVE_CONTROLLER, data: setMaxSlippage(10n ** 18n) }])
     );
-    expect(paramValue(decoded.nested![0]!, 'maxSlippage')).toContain('no slippage is allowed');
+    expect(paramValue(decoded.nested![0]!, 'maxSlippage')).toContain('no slippage allowed');
   });
 });
 
@@ -365,7 +365,7 @@ describe('tick bounds and TWAP windows', () => {
     expect(call.signature).toBe('setLiquidityLowerTickBound(address,int24)');
     expect(paramValue(call, 'lowerTickBound')).toBe('-276330');
     expect(call.parameters.find(p => p.name === 'lowerTickBound')!.type).toBe('int24');
-    expect(call.explanation).toContain('raw int24 Uniswap v3 tick');
+    expect(call.explanation).toContain('a Uniswap v3 tick, not a price');
   });
 
   it('shows a uint32 TWAP window as its raw value with the type stated', () => {
@@ -378,7 +378,7 @@ describe('tick bounds and TWAP windows', () => {
     const call = decoded.nested![0]!;
     expect(call.signature).toBe('setTWAPSecondsAgo(address,uint32)');
     expect(paramValue(call, 'twapSecondsAgo')).toBe('3600');
-    expect(call.explanation).toContain('raw uint32 number of seconds');
+    expect(call.explanation).toContain('TWAP lookback window, in seconds');
   });
 });
 

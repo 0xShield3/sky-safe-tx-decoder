@@ -334,10 +334,7 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
         explanation:
           `${position} carries no 4-byte selector, so nothing identifies what it calls.\n\n` +
           `  • Target — ${target}\n` +
-          valueBullet(value) +
-          `\n` +
-          `A PAU Controller reverts a call with fewer than four bytes of calldata. Confirm ` +
-          `this entry is intended before signing.`,
+          valueBullet(value),
         warnings: [
           `⚠️ ${position} carries no 4-byte selector. Target ${target}, calldata ${data}. ` +
             `Verify the raw calldata by hand before signing.`,
@@ -363,11 +360,6 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
           `  • Call selector — ${callSelector}\n` +
           valueBullet(value) +
           `\n` +
-          `A PAU Controller's selector-to-facet mapping is per-Controller ON-CHAIN STATE, not ` +
-          `a property of any published ABI. This build carries a frozen copy of that mapping ` +
-          `for ${this.tables.length} Controller${this.tables.length === 1 ? '' : 's'}: ` +
-          `${this.tables.map(t => t.controller).join(', ')}. ` +
-          `${target} is not among them, so nothing here can say what this call executes. ` +
           `Read getDispatch(${callSelector}) on ${target} and decode against the facet it ` +
           `names before signing.`,
         warnings: [
@@ -390,17 +382,15 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
         rawCalldata: data,
         explanation:
           `${position} cannot be decoded. Call selector ${callSelector} is not in this ` +
-          `build's frozen dispatch table for ${table.label} ${table.controller}.\n\n` +
+          `build's dispatch table for ${table.label} ${table.controller}, frozen at block ` +
+          `${table.frozenAtBlock} (${table.frozenAtDate}). A selector wired after that ` +
+          `block is absent from it.\n\n` +
           `  • Controller — ${target}\n` +
           `  • Call selector — ${callSelector}\n` +
           valueBullet(value) +
           `\n` +
-          `The mapping from a call selector to a facet is per-Controller ON-CHAIN STATE. ` +
-          `This build's copy was frozen at block ${table.frozenAtBlock} ` +
-          `(${table.frozenAtDate}) and holds ${table.wires.length} selectors. A selector ` +
-          `wired after that block is absent from it. Read ` +
-          `getDispatch(${callSelector}) on ${table.controller} to find the facet and the ` +
-          `delegate selector, then decode against the facet's own verified ABI.`,
+          `Read getDispatch(${callSelector}) on ${table.controller} and decode against the ` +
+          `facet it names before signing.`,
         warnings: [
           `⚠️ ${position} uses call selector ${callSelector} on Controller ${target}, which ` +
             `is not in this build's frozen dispatch table (frozen at block ` +
@@ -539,11 +529,10 @@ export class PAUAdministeredAgentDecoder implements CustomDecoder {
       target: controller,
       rawCalldata: data,
       explanation:
-        `${position} executes ${wire.signature} on ${wire.facetName ?? 'an unnamed facet'}.\n\n` +
         context +
         (note ? `\n${note}\n` : '') +
         (scaleNotes.length > 0
-          ? `\nNot scaled, shown as raw integers: ${scaleNotes.join('; ')}.\n`
+          ? `\n${scaleNotes.map(note => `${note}.`).join(' ')}\n`
           : ''),
       warnings,
       riskLevel:

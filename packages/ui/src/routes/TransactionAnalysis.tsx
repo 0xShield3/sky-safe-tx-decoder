@@ -139,9 +139,8 @@ function DecodedParamList({
  *
  * That caveat says the dispatch table was not checked against the chain. It is
  * correct for the CLI, which makes no network calls, and wrong here: this app
- * always runs the live check and reports the outcome in its own banner, in all
- * three states. Left in place it would sit under a green "verified just now"
- * banner and contradict it.
+ * always runs the live check and surfaces the two problem states itself (a
+ * verified result renders nothing).
  */
 function withoutPauFrozenCaveat(warnings: string[] | undefined): string[] {
   return (warnings ?? []).filter((warning) => !isPauFrozenTableCaveat(warning));
@@ -226,29 +225,13 @@ function PauDispatchBanner({ results, pending }: { results: PauVerification[]; p
 
   if (results.length === 0) return null;
 
-  const verified = results.filter((result) => result.status === 'verified');
+  // A verified result renders nothing. The check exists to catch a stale
+  // table; when the chain agrees, green text would only train signers to
+  // scroll past banners. Only the two problem states speak.
   const unavailable = results.filter((result) => result.status === 'unavailable');
 
   return (
     <div className="mt-3 space-y-2">
-      {verified.map((result, i) => (
-        <div key={`v${i}`} className="rounded border border-green-300 bg-green-50 p-2 text-xs text-green-900">
-          <p className="font-semibold">Function names verified against the chain just now.</p>
-          <details className="mt-1">
-            <summary className="cursor-pointer hover:underline">Details</summary>
-            <p className="mt-1 break-all">
-              Controller {result.controller} reports the same facet and delegate selector as this
-              build&apos;s frozen table for {result.callSelectors.length} call selector
-              {result.callSelectors.length === 1 ? '' : 's'}: {result.callSelectors.join(', ')}
-            </p>
-            {result.frozenAtBlock !== undefined && (
-              <p className="mt-1">
-                Table frozen at block {result.frozenAtBlock} ({result.frozenAtDate}).
-              </p>
-            )}
-          </details>
-        </div>
-      ))}
       {unavailable.map((result, i) => (
         <div key={`u${i}`} className="rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
           <p className="font-semibold">Function names NOT verified against the chain this session.</p>
