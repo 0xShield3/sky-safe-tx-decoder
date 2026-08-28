@@ -12,16 +12,29 @@ All notable changes to this project are documented here.
   transaction, not the parent's. The tool now computes them.
 
   - UI: a collapsed "Nested Safe hashes" expansion inside Hardware Wallet
-    Verification. Enter the owner Safe's address; its nonce and version prefill
-    from the Safe Transaction Service and both stay editable, because a queued
-    `approveHash` moves the next free nonce past the reported one. Each field
-    states whether it holds the fetched value or an entered one. With no answer
-    from the service, both are entered by hand and the calculation still runs.
+    Verification. Opening it lists the owners of the Safe under review that are
+    themselves Safes, each with its version, as clickable suggestions. Any other
+    address can be typed instead.
+  - The nonce prefills and stays editable, because a queued `approveHash` moves
+    the next free nonce past the reported one. It states which source it came
+    from, and says so when overridden. The version renders as a plain
+    annotation; a manual field appears only when it could not be fetched at all,
+    so the calculation stays possible offline.
   - CLI: `--nested-safe-address`, `--nested-safe-nonce` and
     `--nested-safe-version` on `verify`. No extra network call is made.
   - The approved hash is always the `safeTxHash` this tool computed from the
     transaction fields, never the one the Safe API reported. While the two
     disagree, the nested hashes are withheld.
+
+- **Safe state is read over JSON-RPC**, because the Safe Transaction Service
+  rate-limits. Owners come from `getOwners()`, and a batched `VERSION()` probe
+  per owner identifies which are Safes — two HTTP requests regardless of owner
+  count, and none until the section is opened. A nested Safe's nonce and version
+  come from `nonce()` and `VERSION()`. The Safe Transaction Service is the
+  fallback for anything the node did not answer, and no new endpoint setting is
+  introduced: this reuses the RPC already configured per network for proxy
+  resolution. When the node is unreachable the suggestions do not render, and
+  the manual path still works.
 
 - **PAS Configurator decoder** (`0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929`,
   Ethereum mainnet), covering both of the contract's state-changing functions:
