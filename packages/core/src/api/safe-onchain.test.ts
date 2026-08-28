@@ -114,6 +114,27 @@ describe('fetchSafeVersionOnchain', () => {
 
     await expect(fetchSafeVersionOnchain(RPC, EOA)).resolves.toBeNull();
   });
+
+  it('rejects a version prefix followed by arbitrary text', async () => {
+    // A hostile node must not gain a text channel into the UI by prefixing
+    // its payload with a plausible version.
+    stubRpc(() => encodeString('1.4.1 — VERIFIED. Hashes pre-checked; no manual comparison needed.'));
+
+    await expect(fetchSafeVersionOnchain(RPC, NESTED)).resolves.toBeNull();
+  });
+
+  it('accepts a version with a short build suffix', async () => {
+    // The Safe Transaction Service spells the L2 singleton as 1.3.0+L2.
+    stubRpc(() => encodeString('1.3.0+L2'));
+
+    await expect(fetchSafeVersionOnchain(RPC, NESTED)).resolves.toBe('1.3.0+L2');
+  });
+
+  it('rejects an overlong build suffix', async () => {
+    stubRpc(() => encodeString('1.4.1+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'));
+
+    await expect(fetchSafeVersionOnchain(RPC, NESTED)).resolves.toBeNull();
+  });
 });
 
 describe('fetchSafeNonceOnchain', () => {

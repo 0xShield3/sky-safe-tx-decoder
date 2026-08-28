@@ -27,6 +27,7 @@ import {
   detectNestedSafeOwners,
   fetchSafeStateOnchain,
   getNetwork,
+  isSafeVersionShape,
   toChecksumAddress,
   type NestedSafeHashResult,
   type NestedSafeOwner,
@@ -90,6 +91,11 @@ export function NestedSafeHashes({
   const [loading, setLoading] = useState(false);
   /** True once a lookup for the current address has finished. */
   const [looked, setLooked] = useState(false);
+  // The address the nonce/version state was fetched for. The hash block and
+  // annotations render only when it matches the current address, so switching
+  // addresses can never show values fetched for the previous one, even for a
+  // frame.
+  const [fetchedFor, setFetchedFor] = useState<string | null>(null);
   const [owners, setOwners] = useState<NestedSafeOwner[]>([]);
 
   const rpcUrl = rpcUrlFor(network);
@@ -119,6 +125,7 @@ export function NestedSafeHashes({
     if (!open || !nestedAddress) {
       setVersion(null);
       setLooked(false);
+      setFetchedFor(null);
       return;
     }
 
@@ -126,6 +133,8 @@ export function NestedSafeHashes({
     const controller = new AbortController();
     setLoading(true);
     setLooked(false);
+    setVersion(null);
+    setNonce('');
 
     (async () => {
       let nextNonce: string | null = null;
@@ -141,7 +150,9 @@ export function NestedSafeHashes({
         try {
           const info = await new SafeApiClient(network).fetchSafeInfo(nestedAddress);
           if (nextNonce === null) nextNonce = String(info.nonce);
-          if (nextVersion === null && info.version) nextVersion = info.version;
+          if (nextVersion === null && info.version && isSafeVersionShape(info.version)) {
+            nextVersion = info.version;
+          }
         } catch {
           /* Both sources may fail. The manual fields below still work. */
         }
@@ -152,6 +163,7 @@ export function NestedSafeHashes({
       if (nextNonce !== null) setNonce(nextNonce);
       setLoading(false);
       setLooked(true);
+      setFetchedFor(nestedAddress);
     })();
 
     return () => {
@@ -236,7 +248,7 @@ export function NestedSafeHashes({
               />
               {addressError && <p className="text-sm text-red-800 mt-1">{addressError}</p>}
               {loading && <p className="text-sm text-gray-500 mt-1">Loading Safe info…</p>}
-              {version && <p className="text-sm text-gray-700 mt-1">Safe version {version}</p>}
+              {fetchedFor === nestedAddress && version && <p className="text-sm text-gray-700 mt-1">Safe version {version}</p>}
             </div>
 
             <div>
@@ -256,7 +268,7 @@ export function NestedSafeHashes({
             </div>
 
             {/* Only when neither the chain nor the service reported a version. */}
-            {looked && !version && (
+            {looked && fetchedFor === nestedAddress && !version && (
               <div>
                 <label htmlFor="nested-safe-version" className="block text-sm font-semibold text-gray-700 mb-1">
                   Safe version
@@ -273,9 +285,9 @@ export function NestedSafeHashes({
               </div>
             )}
 
-            {computed && 'error' in computed && <p className="text-sm text-red-800">{computed.error}</p>}
+            {fetchedFor === nestedAddress && computed && 'error' in computed && <p className="text-sm text-red-800">{computed.error}</p>}
 
-            {computed && 'result' in computed && (
+            {fetchedFor === nestedAddress && computed && 'result' in computed && (
               <div className="space-y-4 pt-2">
                 <div>
                   <p className="text-sm font-semibold text-gray-700 mb-2">approveHash transaction</p>

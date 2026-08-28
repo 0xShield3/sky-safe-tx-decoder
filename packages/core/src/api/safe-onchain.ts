@@ -28,14 +28,20 @@ export const VERSION_SELECTOR = '0xffa1ad74' as const;
 export const NONCE_SELECTOR = '0xaffed0e0' as const;
 
 /**
- * A Safe version must look like a dotted numeric version.
+ * A Safe version must be exactly a dotted numeric version, with at most a
+ * short build suffix such as `1.3.0+L2`.
  *
  * `VERSION()` is not unique to Safe, so a contract with a permissive fallback
- * can answer with any string. Requiring the shape of a version keeps arbitrary
- * return data from being read as a Safe, and keeps a nonsense string out of the
- * hash calculation.
+ * can answer with any string, and the RPC itself is untrusted. The shape is
+ * anchored at both ends and bounded so nothing beyond a version string can
+ * reach the UI or the hash calculation.
  */
-const VERSION_SHAPE = /^\d+\.\d+\.\d+/;
+const VERSION_SHAPE = /^\d+\.\d+\.\d+(\+[0-9A-Za-z.\-]{1,16})?$/;
+
+/** True when `value` has exactly the shape of a Safe version string. */
+export function isSafeVersionShape(value: string): boolean {
+  return VERSION_SHAPE.test(value);
+}
 
 /** An owner of a Safe that is itself a Safe. */
 export interface NestedSafeOwner {
