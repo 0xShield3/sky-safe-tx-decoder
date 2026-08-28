@@ -26,6 +26,7 @@
  */
 
 import type { Address } from 'viem';
+import { rpcCall } from './rpc.js';
 
 /** EIP-1967 implementation slot: keccak256("eip1967.proxy.implementation") - 1. */
 const EIP1967_IMPLEMENTATION_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
@@ -67,28 +68,6 @@ export function addressFromCallResult(result: string): Address | null {
   if (hex.slice(0, 24) !== '0'.repeat(24)) return null;
   const address = '0x' + hex.slice(24);
   return address === ZERO_ADDRESS ? null : (address as Address);
-}
-
-async function rpcCall(
-  rpcUrl: string,
-  method: string,
-  params: unknown[],
-  signal?: AbortSignal
-): Promise<string | null> {
-  try {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      signal,
-    });
-    if (!response.ok) return null;
-    const json = (await response.json()) as { result?: unknown };
-    return typeof json.result === 'string' ? json.result : null;
-  } catch {
-    // Network failure, abort, or malformed response. Fail closed.
-    return null;
-  }
 }
 
 function getStorageAt(rpcUrl: string, address: string, slot: string, signal?: AbortSignal): Promise<string | null> {

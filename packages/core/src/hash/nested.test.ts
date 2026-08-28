@@ -209,6 +209,20 @@ describe('calculateNestedSafeTxHash', () => {
       expect(v010.safeTxHash).not.toBe(v141.safeTxHash);
     });
 
+    it('treats an +L2 suffix as the same version', () => {
+      // The two version sources disagree on this suffix for real Safes: owner
+      // 0x11cd09a0c5B1dc674615783b0772a9bFD53e3A8F reports "1.3.0" from its
+      // on-chain VERSION() and "1.3.0+L2" from the Safe Transaction Service.
+      // The suffix names the singleton, not the EIP-712 encoding, so whichever
+      // source answered must not change the hashes a signer verifies.
+      const plain = calculateNestedSafeTxHash({ ...base, nestedSafeVersion: '1.3.0' });
+      const l2 = calculateNestedSafeTxHash({ ...base, nestedSafeVersion: '1.3.0+L2' });
+
+      expect(l2.domainHash).toBe(plain.domainHash);
+      expect(l2.messageHash).toBe(plain.messageHash);
+      expect(l2.safeTxHash).toBe(plain.safeTxHash);
+    });
+
     it('rejects an invalid nested Safe version', () => {
       expect(() =>
         calculateNestedSafeTxHash({ ...base, nestedSafeVersion: 'not-a-version' })
