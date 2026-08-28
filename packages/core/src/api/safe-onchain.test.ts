@@ -15,6 +15,7 @@ import {
   detectNestedSafeOwners,
   fetchSafeNonceOnchain,
   fetchSafeOwners,
+  fetchSafeStateOnchain,
   fetchSafeVersionOnchain,
 } from './safe-onchain.js';
 
@@ -127,6 +128,40 @@ describe('fetchSafeNonceOnchain', () => {
     stubRpc(() => '0x');
 
     await expect(fetchSafeNonceOnchain(RPC, NESTED)).resolves.toBeNull();
+  });
+});
+
+describe('fetchSafeStateOnchain', () => {
+  it('reads nonce and version in one HTTP request', async () => {
+    const calls = stubRpc((entry) => {
+      const data = entry.params?.[0]?.data as string;
+      if (data === NONCE_SELECTOR)
+        return '0x000000000000000000000000000000000000000000000000000000000000000e';
+      if (data === VERSION_SELECTOR) return encodeString('1.4.1');
+      return '0x';
+    });
+
+    await expect(fetchSafeStateOnchain(RPC, NESTED)).resolves.toEqual({ nonce: '14', version: '1.4.1' });
+    expect(calls).toHaveLength(1);
+    expect(Array.isArray(calls[0])).toBe(true);
+  });
+
+  it('reports each field independently when only one answers', async () => {
+    stubRpc((entry) => {
+      const data = entry.params?.[0]?.data as string;
+      // A Safe too old to expose VERSION() still answers nonce().
+      return data === NONCE_SELECTOR
+        ? '0x0000000000000000000000000000000000000000000000000000000000000003'
+        : '0x';
+    });
+
+    await expect(fetchSafeStateOnchain(RPC, NESTED)).resolves.toEqual({ nonce: '3', version: null });
+  });
+
+  it('returns both null for an EOA', async () => {
+    stubRpc(() => '0x');
+
+    await expect(fetchSafeStateOnchain(RPC, EOA)).resolves.toEqual({ nonce: null, version: null });
   });
 });
 

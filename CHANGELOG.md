@@ -16,10 +16,10 @@ All notable changes to this project are documented here.
     themselves Safes, each with its version, as clickable suggestions. Any other
     address can be typed instead.
   - The nonce prefills and stays editable, because a queued `approveHash` moves
-    the next free nonce past the reported one. It states which source it came
-    from, and says so when overridden. The version renders as a plain
-    annotation; a manual field appears only when it could not be fetched at all,
-    so the calculation stays possible offline.
+    the next free nonce past the reported one. The version renders as a plain
+    annotation, since it is a property of the deployed contract; a manual field
+    appears only when it could not be fetched at all, so the calculation stays
+    possible offline.
   - CLI: `--nested-safe-address`, `--nested-safe-nonce` and
     `--nested-safe-version` on `verify`. No extra network call is made.
   - The approved hash is always the `safeTxHash` this tool computed from the
@@ -30,7 +30,8 @@ All notable changes to this project are documented here.
   rate-limits. Owners come from `getOwners()`, and a batched `VERSION()` probe
   per owner identifies which are Safes — two HTTP requests regardless of owner
   count, and none until the section is opened. A nested Safe's nonce and version
-  come from `nonce()` and `VERSION()`. The Safe Transaction Service is the
+  come from `nonce()` and `VERSION()` in one further batched request. The Safe
+  Transaction Service is the
   fallback for anything the node did not answer, and no new endpoint setting is
   introduced: this reuses the RPC already configured per network for proxy
   resolution. When the node is unreachable the suggestions do not render, and

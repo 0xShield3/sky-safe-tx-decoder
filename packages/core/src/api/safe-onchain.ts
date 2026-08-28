@@ -60,6 +60,16 @@ function decodeVersion(result: string | null): string | null {
   return value && VERSION_SHAPE.test(value) ? value : null;
 }
 
+function decodeUint(result: string | null): string | null {
+  if (!result || result === '0x') return null;
+  try {
+    const [value] = decodeAbiParameters([{ type: 'uint256' }], result as Hex);
+    return typeof value === 'bigint' ? value.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Read a Safe's owner list with one `eth_call` to `getOwners()`.
  *
@@ -112,14 +122,38 @@ export async function fetchSafeNonceOnchain(
   signal?: AbortSignal
 ): Promise<string | null> {
   const result = await rpcCall(rpcUrl, 'eth_call', [{ to: safeAddress, data: NONCE_SELECTOR }, 'latest'], signal);
-  if (!result || result === '0x') return null;
+  return decodeUint(result);
+}
 
-  try {
-    const [nonce] = decodeAbiParameters([{ type: 'uint256' }], result as Hex);
-    return typeof nonce === 'bigint' ? nonce.toString() : null;
-  } catch {
-    return null;
-  }
+/** A Safe's current nonce and version, as far as the node could report them. */
+export interface SafeOnchainState {
+  /** Decimal string, or null if `nonce()` gave no usable answer. */
+  nonce: string | null;
+  /** Version, or null if `VERSION()` gave no usable answer. */
+  version: string | null;
+}
+
+/**
+ * Read a Safe's nonce and version in a single batched HTTP request.
+ *
+ * Either field is null on its own if that call did not answer, so a caller can
+ * fall back for one without discarding the other.
+ */
+export async function fetchSafeStateOnchain(
+  rpcUrl: string,
+  safeAddress: string,
+  signal?: AbortSignal
+): Promise<SafeOnchainState> {
+  const [nonceResult, versionResult] = await rpcBatch(
+    rpcUrl,
+    [
+      { method: 'eth_call', params: [{ to: safeAddress, data: NONCE_SELECTOR }, 'latest'] },
+      { method: 'eth_call', params: [{ to: safeAddress, data: VERSION_SELECTOR }, 'latest'] },
+    ],
+    signal
+  );
+
+  return { nonce: decodeUint(nonceResult ?? null), version: decodeVersion(versionResult ?? null) };
 }
 
 /**

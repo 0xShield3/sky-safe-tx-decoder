@@ -25,8 +25,7 @@ import {
   SafeApiClient,
   calculateNestedSafeTxHash,
   detectNestedSafeOwners,
-  fetchSafeNonceOnchain,
-  fetchSafeVersionOnchain,
+  fetchSafeStateOnchain,
   getNetwork,
   toChecksumAddress,
   type NestedSafeHashResult,
@@ -133,10 +132,9 @@ export function NestedSafeHashes({
       let nextVersion: string | null = null;
 
       if (rpcUrl) {
-        [nextNonce, nextVersion] = await Promise.all([
-          fetchSafeNonceOnchain(rpcUrl, nestedAddress, controller.signal),
-          fetchSafeVersionOnchain(rpcUrl, nestedAddress, controller.signal),
-        ]);
+        const state = await fetchSafeStateOnchain(rpcUrl, nestedAddress, controller.signal);
+        nextNonce = state.nonce;
+        nextVersion = state.version;
       }
 
       if (nextNonce === null || nextVersion === null) {
