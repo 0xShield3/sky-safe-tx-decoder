@@ -22,6 +22,7 @@ import {
   StUsdsRateSetterDecoder,
   PASConfiguratorDecoder,
   calculateSafeTxHash,
+  calculateNestedSafeTxHash,
   verifySafeTxHash,
   analyzeSecurity,
   decodeMultiSend,
@@ -38,6 +39,7 @@ import {
   printCustomDecodedData,
   printNestedTransactionData,
   printHashVerification,
+  printNestedSafeHashes,
   printSecurityWarnings,
 } from '../formatters/output.js';
 
@@ -46,6 +48,17 @@ decoderRegistry.register(new LockstakeEngineDecoder());
 decoderRegistry.register(new SPBEAMDecoder());
 decoderRegistry.register(new StUsdsRateSetterDecoder());
 decoderRegistry.register(new PASConfiguratorDecoder());
+
+interface VerifyOptions {
+  address?: string;
+  nonce?: number;
+  network: string;
+  file?: string;
+  /** Owner Safe that approves with approveHash. Enables the nested hash output. */
+  nestedSafeAddress?: string;
+  nestedSafeNonce?: number;
+  nestedSafeVersion?: string;
+}
 
 export function createVerifyCommand(): Command {
   const command = new Command('verify');
@@ -56,8 +69,34 @@ export function createVerifyCommand(): Command {
     .option('-n, --nonce <nonce>', 'Transaction nonce', parseNonce)
     .option('--network <network>', 'Network name (e.g., ethereum, sepolia)', 'ethereum')
     .option('-f, --file <file>', 'Read transaction from JSON file instead of API')
-    .action(async (options: { address?: string; nonce?: number; network: string; file?: string }) => {
+    .option(
+      '--nested-safe-address <address>',
+      'Owner Safe that approves this transaction with approveHash. Adds that Safe’s hashes to the output.'
+    )
+    .option('--nested-safe-nonce <nonce>', 'Nonce of the nested Safe’s approveHash transaction', parseNonce)
+    .option('--nested-safe-version <version>', 'Safe contract version of the nested Safe')
+    .action(async (options: VerifyOptions) => {
       try {
+        // Validate the nested-Safe flags up front, before any network call, so a
+        // missing flag fails immediately rather than after a full analysis.
+        if (options.nestedSafeAddress) {
+          if (!options.nestedSafeAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+            console.error(chalk.red(`✗ Invalid nested Safe address: ${options.nestedSafeAddress}`));
+            process.exit(1);
+          }
+          if (options.nestedSafeNonce === undefined) {
+            console.error(chalk.red('✗ --nested-safe-address requires --nested-safe-nonce'));
+            process.exit(1);
+          }
+          if (!options.nestedSafeVersion) {
+            console.error(chalk.red('✗ --nested-safe-address requires --nested-safe-version'));
+            process.exit(1);
+          }
+        } else if (options.nestedSafeNonce !== undefined || options.nestedSafeVersion) {
+          console.error(chalk.red('✗ --nested-safe-nonce and --nested-safe-version require --nested-safe-address'));
+          process.exit(1);
+        }
+
         // Validate mode
         if (options.file && (options.address || options.nonce !== undefined)) {
           console.error(chalk.red('✗ Cannot use both --file and --address/--nonce'));
@@ -325,6 +364,28 @@ export function createVerifyCommand(): Command {
             isValid,
             version
           );
+
+          if (options.nestedSafeAddress) {
+            // The approved hash is the one computed here, never tx.safeTxHash
+            // from the API. A nested signer approves a bytes32 and nothing else,
+            // so an unverified hash must not be turned into an approval.
+            if (!isValid) {
+              console.log(
+                chalk.red('\n✗ Nested Safe hashes withheld: the parent safeTxHash does not match the API.')
+              );
+            } else {
+              const nested = calculateNestedSafeTxHash({
+                chainId: client.getChainId(),
+                nestedSafeAddress: options.nestedSafeAddress as Address,
+                nestedSafeNonce: String(options.nestedSafeNonce),
+                nestedSafeVersion: options.nestedSafeVersion!,
+                parentSafeAddress: safeAddress as Address,
+                parentSafeTxHash: hashResult.safeTxHash,
+              });
+
+              printNestedSafeHashes(options.nestedSafeAddress, options.nestedSafeVersion!, nested);
+            }
+          }
         } catch (error) {
           console.log(chalk.red('\n✗ Hash calculation failed'));
           console.log(chalk.dim(`  Error: ${error instanceof Error ? error.message : String(error)}`));
