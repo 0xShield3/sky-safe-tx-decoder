@@ -6,6 +6,23 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **Nested Safe hashes.** An owner that is itself a Safe cannot produce a
+  signature. It approves by executing its own Safe transaction calling
+  `approveHash(bytes32)` on the parent, so its signers verify the hashes of that
+  transaction, not the parent's. The tool now computes them.
+
+  - UI: a collapsed "Nested Safe hashes" expansion inside Hardware Wallet
+    Verification. Enter the owner Safe's address; its nonce and version prefill
+    from the Safe Transaction Service and both stay editable, because a queued
+    `approveHash` moves the next free nonce past the reported one. Each field
+    states whether it holds the fetched value or an entered one. With no answer
+    from the service, both are entered by hand and the calculation still runs.
+  - CLI: `--nested-safe-address`, `--nested-safe-nonce` and
+    `--nested-safe-version` on `verify`. No extra network call is made.
+  - The approved hash is always the `safeTxHash` this tool computed from the
+    transaction fields, never the one the Safe API reported. While the two
+    disagree, the nested hashes are withheld.
+
 - **PAS Configurator decoder** (`0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929`,
   Ethereum mainnet), covering both of the contract's state-changing functions:
   `setRateLimit` and `callControllerAction`. The ABI is transcribed from the
