@@ -48,10 +48,12 @@ interface NestedSafeHashesProps {
   uppercase: boolean;
 }
 
-/** Where a prefilled value came from. */
-type Source = 'rpc' | 'api';
-
-const SOURCE_LABEL: Record<Source, string> = { rpc: 'RPC', api: 'Safe API' };
+/**
+ * Width cap for the address field: enough for a whole 42-character address in
+ * the monospace face plus the input's own padding, and no wider. A pasted
+ * address must never scroll or clip inside it.
+ */
+const ADDRESS_FIELD_WIDTH = 'sm:max-w-[48ch]';
 
 function rpcUrlFor(network: string): string | undefined {
   try {
@@ -83,10 +85,9 @@ export function NestedSafeHashes({
   const [addressInput, setAddressInput] = useState('');
   const [nonce, setNonce] = useState('');
   /** Version as read from the chain or the service. Not editable while set. */
-  const [version, setVersion] = useState<{ value: string; source: Source } | null>(null);
+  const [version, setVersion] = useState<string | null>(null);
   /** Manual version, used only when neither source answered. */
   const [versionInput, setVersionInput] = useState('');
-  const [fetchedNonce, setFetchedNonce] = useState<{ value: string; source: Source } | null>(null);
   const [loading, setLoading] = useState(false);
   /** True once a lookup for the current address has finished. */
   const [looked, setLooked] = useState(false);
@@ -117,7 +118,6 @@ export function NestedSafeHashes({
   // RPC gave nothing.
   useEffect(() => {
     if (!open || !nestedAddress) {
-      setFetchedNonce(null);
       setVersion(null);
       setLooked(false);
       return;
@@ -129,32 +129,29 @@ export function NestedSafeHashes({
     setLooked(false);
 
     (async () => {
-      let nextNonce: { value: string; source: Source } | null = null;
-      let nextVersion: { value: string; source: Source } | null = null;
+      let nextNonce: string | null = null;
+      let nextVersion: string | null = null;
 
       if (rpcUrl) {
-        const [onchainNonce, onchainVersion] = await Promise.all([
+        [nextNonce, nextVersion] = await Promise.all([
           fetchSafeNonceOnchain(rpcUrl, nestedAddress, controller.signal),
           fetchSafeVersionOnchain(rpcUrl, nestedAddress, controller.signal),
         ]);
-        if (onchainNonce !== null) nextNonce = { value: onchainNonce, source: 'rpc' };
-        if (onchainVersion !== null) nextVersion = { value: onchainVersion, source: 'rpc' };
       }
 
-      if (!nextNonce || !nextVersion) {
+      if (nextNonce === null || nextVersion === null) {
         try {
           const info = await new SafeApiClient(network).fetchSafeInfo(nestedAddress);
-          if (!nextNonce) nextNonce = { value: String(info.nonce), source: 'api' };
-          if (!nextVersion && info.version) nextVersion = { value: info.version, source: 'api' };
+          if (nextNonce === null) nextNonce = String(info.nonce);
+          if (nextVersion === null && info.version) nextVersion = info.version;
         } catch {
           /* Both sources may fail. The manual fields below still work. */
         }
       }
 
       if (cancelled) return;
-      setFetchedNonce(nextNonce);
       setVersion(nextVersion);
-      if (nextNonce) setNonce(nextNonce.value);
+      if (nextNonce !== null) setNonce(nextNonce);
       setLoading(false);
       setLooked(true);
     })();
@@ -165,7 +162,7 @@ export function NestedSafeHashes({
     };
   }, [open, nestedAddress, rpcUrl, network]);
 
-  const effectiveVersion = version?.value ?? versionInput.trim();
+  const effectiveVersion = version ?? versionInput.trim();
   const nonceError = nonce.trim() !== '' && !/^\d+$/.test(nonce.trim()) ? 'Nonce must be a whole number.' : null;
 
   const computed = useMemo((): { result: NestedSafeHashResult } | { error: string } | null => {
@@ -187,12 +184,6 @@ export function NestedSafeHashes({
       return { error: error instanceof Error ? error.message : String(error) };
     }
   }, [chainId, nestedAddress, nonce, nonceError, effectiveVersion, parentSafeAddress, computedParentSafeTxHash]);
-
-  const nonceNote = !fetchedNonce
-    ? 'Entered'
-    : nonce === fetchedNonce.value
-      ? `${SOURCE_LABEL[fetchedNonce.source]}: ${fetchedNonce.value}`
-      : `Entered. ${SOURCE_LABEL[fetchedNonce.source]}: ${fetchedNonce.value}`;
 
   return (
     <details className="border border-gray-200 rounded-lg" onToggle={(e) => setOpen(e.currentTarget.open)}>
@@ -243,11 +234,11 @@ export function NestedSafeHashes({
                 value={addressInput}
                 onChange={(e) => setAddressInput(e.target.value)}
                 placeholder="0x0000000000000000000000000000000000000000"
-                className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded break-all"
+                className={`w-full ${ADDRESS_FIELD_WIDTH} font-mono text-sm px-3 py-2 border border-gray-300 rounded`}
               />
               {addressError && <p className="text-sm text-red-800 mt-1">{addressError}</p>}
               {loading && <p className="text-sm text-gray-500 mt-1">Loading Safe info…</p>}
-              {version && <p className="text-sm text-gray-700 mt-1">Safe version {version.value}</p>}
+              {version && <p className="text-sm text-gray-700 mt-1">Safe version {version}</p>}
             </div>
 
             <div>
@@ -263,7 +254,6 @@ export function NestedSafeHashes({
                 onChange={(e) => setNonce(e.target.value)}
                 className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded sm:max-w-xs"
               />
-              <p className="text-xs text-gray-500 mt-1">{nonceNote}</p>
               {nonceError && <p className="text-sm text-red-800 mt-1">{nonceError}</p>}
             </div>
 

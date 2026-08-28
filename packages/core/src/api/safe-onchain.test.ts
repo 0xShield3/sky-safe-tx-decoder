@@ -117,7 +117,7 @@ describe('fetchSafeVersionOnchain', () => {
 
 describe('fetchSafeNonceOnchain', () => {
   it('decodes the nonce as a decimal string', async () => {
-    // Real return data from the nested Safe: 0x…0e is 14.
+    // Real return data from the nested Safe. The word decodes to 14.
     stubRpc(() => '0x000000000000000000000000000000000000000000000000000000000000000e');
 
     await expect(fetchSafeNonceOnchain(RPC, NESTED)).resolves.toBe('14');
