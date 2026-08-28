@@ -250,7 +250,7 @@ export function NestedSafeHashes({
                 autoComplete="off"
                 value={nonce}
                 onChange={(e) => setNonce(e.target.value)}
-                className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded sm:max-w-xs"
+                className="w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded sm:max-w-[12ch]"
               />
               {nonceError && <p className="text-sm text-red-800 mt-1">{nonceError}</p>}
             </div>
