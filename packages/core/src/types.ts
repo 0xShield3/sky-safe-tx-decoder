@@ -178,7 +178,11 @@ export interface SafeApiConfirmation {
  */
 export interface SafeApiSafeInfo {
   address: Address
-  nonce: number
+  /**
+   * Current nonce. The service serialises this as a decimal string on some
+   * deployments and as a number on others, so callers must normalise it.
+   */
+  nonce: number | string
   threshold: number
   owners: Address[]
   masterCopy: Address
