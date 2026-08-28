@@ -32,6 +32,7 @@ import { Address } from '../components/Address';
 import { ParamValue } from '../components/ParamValue';
 import { WeiValue } from '../components/WeiValue';
 import { HashHex } from '../components/HashHex';
+import { NestedSafeHashes } from '../components/NestedSafeHashes';
 import { TransactionLog } from '../components/TransactionLog';
 import { useAddressBook } from '../address-book/AddressBookContext';
 import { useSafeRoute } from '../safe-route/SafeRouteProvider';
@@ -1515,6 +1516,19 @@ export default function TransactionAnalysis() {
                 <p className="text-xs text-gray-500 mt-1">Unique per transaction per Safe. Shown on some devices.</p>
               </div>
             </div>
+
+            {/* An owner that is itself a Safe signs a different transaction —
+                its own approveHash call — so its signers verify different
+                hashes. Optional and collapsed: most Safes have no nested owner.
+                The parent hash passed in is the one computed above, gated on it
+                matching the API. */}
+            <NestedSafeHashes
+              network={network}
+              chainId={chainId}
+              parentSafeAddress={address as string}
+              computedParentSafeTxHash={hashesMatch ? hashes.safeTxHash : null}
+              uppercase={hashUppercase}
+            />
 
             {!hashesMatch && (
               <div className="bg-red-50 border-2 border-red-400 rounded-lg p-4">
