@@ -56,7 +56,7 @@ jobs:
 
       # Keyless provenance binding the exact file to this commit + workflow.
       # Verify after download:
-      #   gh attestation verify <file> --repo 0xShield3/sky-safe-tx-decoder
+      #   gh attestation verify <file> --repo sky-ecosystem/sky-safe-tx-decoder
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:

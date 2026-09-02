@@ -101,7 +101,7 @@ After downloading, verify before trusting:
 shasum -a 256 -c sky-safe-tx-decoder-<tag>.html.sha256
 
 # Provenance — confirms GitHub Actions built this exact file from this repo/commit
-gh attestation verify sky-safe-tx-decoder-<tag>.html --repo 0xShield3/sky-safe-tx-decoder
+gh attestation verify sky-safe-tx-decoder-<tag>.html --repo sky-ecosystem/sky-safe-tx-decoder
 
 # Strongest — reproduce it yourself and compare the hash
 git checkout <tag>
@@ -167,7 +167,7 @@ with or drift stale, so each session you re-load fresh files.
 ### From Source
 
 ```bash
-git clone https://github.com/0xShield3/sky-safe-tx-decoder
+git clone https://github.com/sky-ecosystem/sky-safe-tx-decoder
 cd sky-safe-tx-decoder
 pnpm install
 pnpm build

@@ -30,7 +30,7 @@ yourself from a git tag rather than installing from npm:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/0xShield3/sky-safe-tx-decoder
+git clone https://github.com/sky-ecosystem/sky-safe-tx-decoder
 cd sky-safe-tx-decoder
 
 # 2. Check out a signed git tag (replace v0.4.0 with the version you want)
@@ -100,6 +100,6 @@ guarantees during install of `@shield3/sky-safe-cli`.
 
 ## Reporting a security issue
 
-Open an issue at https://github.com/0xShield3/sky-safe-tx-decoder/issues for
+Open an issue at https://github.com/sky-ecosystem/sky-safe-tx-decoder/issues for
 non-sensitive reports. For coordinated disclosure of an actively exploitable
 issue, email the maintainers privately before opening a public issue.
