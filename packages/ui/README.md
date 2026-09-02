@@ -53,15 +53,28 @@ http://localhost:5173/#/safe/ethereum/0xfeEDfaCeFeEdFaceFEedFACefEEDFaCEfEeDfAce
 
 | Nonce | Fixture | Shows |
 | ----- | ------- | ----- |
-| 0 | `pas-bare-key` | A bare key resolving from its name alone, denominated in USDS |
-| 1 | `pas-unlimited-repin` | A two-operand key denominated by its resolved asset operand, re-pinned unlimited |
-| 2 | `pas-aggregate-18dec` | `LIMIT_UNISWAP_V3_DEPOSIT` keyed by pool alone, metering a 1e18-normalised sum |
-| 3 | `pas-pertoken-6dec` | The same key name keyed by token and pool, metering raw 6-decimal USDC |
-| 4 | `pas-unresolved-key` | A key matching no known preimage: full bytes32, no scaled amount, high risk |
-| 5 | `pas-controller-action` | `callControllerAction`, with the authorising keccak256 surfaced |
+| 0 | `pas-increase` | A bare key resolving from its name alone, denominated in USDS |
+| 1 | `pas-decrease` | The same key set lower, which PAS permits without a ceiling or a cooldown |
+| 2 | `pas-unlimited-repin` | A key re-pinned unlimited: `type(uint256).max` with slope 0 |
+| 3 | `pas-controller-action` | `callControllerAction`, with the authorising keccak256 surfaced |
+| 4 | `pas-aggregate-18dec` | `LIMIT_UNISWAP_V3_DEPOSIT` keyed by pool alone, metering a 1e18-normalised sum |
+| 5 | `pas-pertoken-6dec` | The same key name keyed by token and pool, metering raw 6-decimal USDC |
+| 6 | `pas-unresolved-key` | A key matching no known preimage: full bytes32, no scaled amount, high risk |
+| 7 | `pas-unlimited-bad-slope` | `type(uint256).max` with a non-zero slope, which reverts on a locked key |
+| 8 | `pau-usds-mint-basin-deposit` | PAU: mint USDS, then deposit it into the JTRSY Basin |
+| 9 | `pau-basin-withdraw-psm-burn` | PAU: Basin withdraw, PSM swap, USDS burn — three facets in one batch |
+| 10 | `pau-uniswap-v3-swap` | PAU: a Uniswap v3 swap, bounded by `maxTickDelta` rather than max slippage |
+| 11 | `pau-uniswap-v3-add-liquidity` | PAU: `addLiquidity`, with its tick and amount tuples |
+| 12 | `pau-uniswap-v3-remove-liquidity` | PAU: `removeLiquidity` by token id and liquidity |
 
-Nonces 2 and 3 are worth opening back to back. They share a key name and differ by a factor
+Nonces 4 and 5 are worth opening back to back. They share a key name and differ by a factor
 of 10^12.
+
+Nonces 8 to 12 carry the real MultiSend payloads of five executed mainnet transactions from
+Grove's allocator Safe `0x9187807e07112359C481870feB58f0c117a29179`, with the Safe address
+replaced by the sentinel. They reach a PAU Controller through
+`AdministeredAgent.batchCall`, so the facet call is four layers deep. See
+`packages/core/src/decoders/PAU.md`.
 
 Every such view carries a banner stating the data is simulated. The hash check fails by
 design: fixtures carry a placeholder `safeTxHash`, and the app recomputes the real one
@@ -73,10 +86,14 @@ rather than trusting it. Nothing fakes a passing verification.
 2. Run `node packages/ui/src/dev/fixtures/generate.mjs`.
 3. Open the new nonce. The fixture is picked up automatically; nothing else needs editing.
 
+A fixture built from a real transaction is written by hand instead, because its calldata is
+captured rather than constructed. The five PAU fixtures are of that kind and are not in
+`FIXTURES`. Discovery is by nonce either way.
+
 Fixtures follow the same shape as the files in `examples/`, so the CLI reads them too:
 
 ```bash
-node packages/cli/dist/index.js verify --file packages/ui/src/dev/fixtures/pas-bare-key.json
+node packages/cli/dist/index.js verify --file packages/ui/src/dev/fixtures/pas-increase.json
 ```
 
 ### Why it cannot reach production

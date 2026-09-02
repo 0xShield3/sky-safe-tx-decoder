@@ -15,7 +15,19 @@ interface AddressHighlighterProps {
   className?: string
 }
 
-const ADDRESS_REGEX = /(0x[a-fA-F0-9]{40})/g
+/**
+ * A 20-byte hex value that is not part of a longer hex run.
+ *
+ * The trailing guard matters. Without it the first 40 hex characters of a
+ * `bytes32` match, so a hash rendered in an explanation is split into a
+ * highlighted "address" and a remainder — and an address-book label can attach
+ * to the first 20 bytes of something that is not an address at all. Every
+ * decoder that prints a `bytes32` in its explanation hits that: PAS prints a
+ * rate-limit key, PAU prints an integration id.
+ *
+ * The leading guard is the same rule from the other side.
+ */
+const ADDRESS_REGEX = /(?<![a-fA-F0-9])(0x[a-fA-F0-9]{40})(?![a-fA-F0-9])/g
 
 export function AddressHighlighter({ text, safeAddress, className = '' }: AddressHighlighterProps) {
   const parts: Array<{ text: string; isAddress: boolean }> = []

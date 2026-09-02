@@ -1,0 +1,58 @@
+name: PAU dispatch table drift
+
+# A PAU Controller maps a call selector to a facet and a delegate selector as
+# on-chain state. This repository ships a frozen copy of that map so the decoder
+# stays synchronous, pure and offline-capable.
+#
+# A stale copy does not fail to decode. The Controller forwards the argument
+# bytes verbatim, so a rewired selector keeps the same argument shape and the
+# decoding still round-trips — under the wrong function name. This job is what
+# turns that silent failure into a notification.
+#
+# It NEVER commits and NEVER auto-updates the table. Regenerating the table is a
+# reviewed change, because the table is what the decoder's labels rest on.
+#
+# It never fails the run either: an unreachable RPC or a missing secret exits
+# quietly, because a check that goes red on infrastructure noise is a check
+# people mute.
+on:
+  schedule:
+    - cron: '43 6 * * *' # daily, off the hour and clear of the rate-limit-key check
+  workflow_dispatch: # so it can be run on demand after a spell
+
+# Least privilege: read the tree, write issues. Nothing else.
+permissions:
+  contents: read
+  issues: write
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The check compares the chain against the table the shipped decoder
+      # actually imports, so core has to be built first.
+      - name: Build core
+        run: pnpm --filter @shield3/sky-safe-core build
+
+      - name: Compare the frozen dispatch table against the chain
+        env:
+          ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/generate-pau-dispatch.mjs --check --issues
