@@ -1,5 +1,17 @@
 # Sky Safe Transaction Decoder
 
+## This repository has moved
+
+Development continues at
+[sky-ecosystem/sky-safe-tx-decoder](https://github.com/sky-ecosystem/sky-safe-tx-decoder).
+This copy is archived and read-only.
+
+Use the new repository for source, issues, and all releases from v0.4.0 onward.
+Releases up to v0.4.0 remain downloadable here, and each is also published at the
+new location with its own build attestation. The npm package names are unchanged:
+`@shield3/sky-safe-core` and `@shield3/sky-safe-cli`.
+
+
 > **"Don't trust, verify!"** - Independently verify Safe transaction hashes before signing.
 
 TypeScript tool for calculating and verifying Safe multisig transaction hashes with security analysis and protocol-specific decoding. Available as a CLI, web UI, and core library.
