@@ -6,6 +6,37 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **Nested Safe hashes.** An owner that is itself a Safe cannot produce a
+  signature. It approves by executing its own Safe transaction calling
+  `approveHash(bytes32)` on the parent, so its signers verify the hashes of that
+  transaction, not the parent's. The tool now computes them.
+
+  - UI: a collapsed "Nested Safe hashes" expansion inside Hardware Wallet
+    Verification. Opening it lists the owners of the Safe under review that are
+    themselves Safes, each with its version, as clickable suggestions. Any other
+    address can be typed instead.
+  - The nonce prefills and stays editable, because a queued `approveHash` moves
+    the next free nonce past the reported one. The version renders as a plain
+    annotation, since it is a property of the deployed contract; a manual field
+    appears only when it could not be fetched at all, so the calculation stays
+    possible offline.
+  - CLI: `--nested-safe-address`, `--nested-safe-nonce` and
+    `--nested-safe-version` on `verify`. No extra network call is made.
+  - The approved hash is always the `safeTxHash` this tool computed from the
+    transaction fields, never the one the Safe API reported. While the two
+    disagree, the nested hashes are withheld.
+
+- **Safe state is read over JSON-RPC**, because the Safe Transaction Service
+  rate-limits. Owners come from `getOwners()`, and a batched `VERSION()` probe
+  per owner identifies which are Safes — two HTTP requests regardless of owner
+  count, and none until the section is opened. A nested Safe's nonce and version
+  come from `nonce()` and `VERSION()` in one further batched request. The Safe
+  Transaction Service is the
+  fallback for anything the node did not answer, and no new endpoint setting is
+  introduced: this reuses the RPC already configured per network for proxy
+  resolution. When the node is unreachable the suggestions do not render, and
+  the manual path still works.
+
 - **PAS Configurator decoder** (`0xb7E61Df6CAb0A51E9A5dab1A7DD3f942dDe5b929`,
   Ethereum mainnet), covering both of the contract's state-changing functions:
   `setRateLimit` and `callControllerAction`. The ABI is transcribed from the

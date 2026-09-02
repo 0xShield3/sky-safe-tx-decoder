@@ -249,6 +249,42 @@ export class SafeApiClient {
   }
 
   /**
+   * Fetch a Safe's configuration: nonce, threshold, owners, version.
+   *
+   * @param safeAddress - Safe multisig address
+   * @returns The Safe's current configuration
+   * @throws {SafeApiError} if request fails (including after retries)
+   */
+  async fetchSafeInfo(safeAddress: Address): Promise<SafeApiSafeInfo> {
+    return retryWithBackoff(async () => {
+      const endpoint = `${this.baseUrl}/api/v1/safes/${safeAddress}/`
+
+      try {
+        const response = await fetch(endpoint)
+
+        if (!response.ok) {
+          throw new SafeApiError(
+            `Failed to fetch Safe info: ${response.statusText}`,
+            response.status
+          )
+        }
+
+        return (await response.json()) as SafeApiSafeInfo
+      } catch (error) {
+        if (error instanceof SafeApiError) {
+          throw error
+        }
+
+        throw new SafeApiError(
+          `Failed to fetch Safe info: ${error instanceof Error ? error.message : String(error)}`,
+          undefined,
+          error
+        )
+      }
+    }, 3, 1000, this.onRetry)
+  }
+
+  /**
    * Fetch Safe contract version
    * Port of bash script lines 1200-1204
    *

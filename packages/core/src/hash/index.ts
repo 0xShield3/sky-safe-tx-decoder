@@ -8,6 +8,16 @@
 // Main calculator (primary export)
 export { calculateSafeTxHash, verifySafeTxHash, type SafeTxHashResult } from './calculator.js';
 
+// Nested Safe (Safe-owned-by-Safe) approveHash hashes
+export {
+  APPROVE_HASH_SELECTOR,
+  buildApproveHashCallData,
+  buildApproveHashTransaction,
+  calculateNestedSafeTxHash,
+  type NestedSafeHashInput,
+  type NestedSafeHashResult,
+} from './nested.js';
+
 // Component functions (for advanced usage)
 export { calculateDomainHash } from './domain.js';
 export { calculateMessageHash } from './message.js';

@@ -40,6 +40,31 @@ sky-safe verify --file examples/gas-token-attack.json
 | `--nonce <nonce>` | Transaction nonce | - |
 | `--network <network>` | Network (`ethereum`, `sepolia`) | `ethereum` |
 | `--file <path>` | Load from JSON file instead of API | - |
+| `--nested-safe-address <address>` | Owner Safe that approves with `approveHash` | - |
+| `--nested-safe-nonce <nonce>` | Nonce of that Safe's `approveHash` transaction | - |
+| `--nested-safe-version <version>` | Safe contract version of that Safe | - |
+
+### Nested Safes
+
+An owner that is itself a Safe cannot sign. It approves by executing its own Safe
+transaction calling `approveHash(bytes32)` on the parent, so its signers verify
+different hashes.
+
+Pass all three `--nested-safe-*` flags to print those hashes after the parent's.
+The CLI makes no extra network call for them; look the nonce and version up in
+the Safe UI or with `cast`.
+
+```bash
+sky-safe verify \
+  --address 0x1a37bF1Ccbf570C92FE2239FefaaAF861c2924DD \
+  --nonce 13 \
+  --nested-safe-address 0xC3eA7C657884BB380B66D79C36aDCb5658b01896 \
+  --nested-safe-nonce 13 \
+  --nested-safe-version 1.4.1
+```
+
+The approved hash is the `safeTxHash` the tool computed. If it does not match the
+one the Safe API reported, the nested hashes are withheld.
 
 ## Output
 

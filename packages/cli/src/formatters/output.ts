@@ -11,6 +11,7 @@ import type {
   SecurityAnalysisResult,
   SafeApiDataDecoded,
   DecodeVerificationStatus,
+  NestedSafeHashResult,
 } from '@shield3/sky-safe-core';
 import { getAddressTag, isApiFallbackSentinel } from '@shield3/sky-safe-core';
 import type { Address } from 'viem';
@@ -360,6 +361,56 @@ export function printHashVerification(
     console.log(chalk.yellow('    - Safe version mismatch'));
     console.log(chalk.yellow('    - Hash calculation implementation'));
   }
+}
+
+/**
+ * Print the hashes a nested Safe's own signers verify.
+ *
+ * A nested Safe (a Safe that is an owner of the Safe under analysis) approves by
+ * executing `approveHash(bytes32)` on the parent. Its signers see the hashes of
+ * that transaction, not the parent's.
+ */
+export function printNestedSafeHashes(
+  nestedSafeAddress: string,
+  nestedSafeVersion: string,
+  result: NestedSafeHashResult
+): void {
+  console.log(chalk.bold('\n========================================'));
+  console.log(chalk.bold('= Nested Safe Hashes                  ='));
+  console.log(chalk.bold('========================================'));
+
+  console.log(`\n${chalk.dim('Nested Safe')}: ${chalk.cyan(nestedSafeAddress)}`);
+  console.log(`${chalk.dim('Nested Safe Version')}: ${chalk.cyan(nestedSafeVersion)}`);
+
+  printHeader('approveHash Transaction');
+
+  console.log(chalk.dim('To:'));
+  console.log(chalk.green(result.transaction.to));
+
+  console.log(chalk.dim('\nValue:'));
+  console.log(chalk.green(String(result.transaction.value)));
+
+  console.log(chalk.dim('\nData:'));
+  console.log(chalk.green(result.transaction.data));
+
+  console.log(chalk.dim('\nOperation:'));
+  console.log(chalk.green(`${result.transaction.operation} (CALL)`));
+
+  console.log(chalk.dim('\nNonce:'));
+  console.log(chalk.green(String(result.transaction.nonce)));
+
+  printHeader('Computed Hashes');
+
+  console.log(chalk.dim('Domain Hash:'));
+  console.log(chalk.green(result.domainHash));
+
+  console.log(chalk.dim('\nMessage Hash:'));
+  console.log(chalk.green(result.messageHash));
+
+  console.log(chalk.dim('\nsafeTxHash:'));
+  console.log(chalk.green(result.safeTxHash));
+
+  console.log(chalk.dim("\nThese are the hashes the nested Safe's signers verify."));
 }
 
 /**
